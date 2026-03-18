@@ -1,0 +1,153 @@
+name: "F5XC WAF on RE + AppConnect AWS Destroy"
+
+on:
+  workflow_dispatch:
+
+jobs:
+
+  terraform_xc:
+    name: "F5XC WAF"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./waf-re-ac-aws/xc
+    env:
+      TF_VAR_tf_cloud_organization:    ${{ secrets.TF_CLOUD_ORGANIZATION }}
+      TF_VAR_tf_cloud_workspace_infra: ${{ vars.TF_CLOUD_WORKSPACE_AWS_INFRA }}
+      TF_VAR_tf_cloud_workspace_vm:    ${{ vars.TF_CLOUD_WORKSPACE_AWS_VM }}
+      TF_VAR_api_url:                  ${{ secrets.XC_API_URL }}
+      TF_VAR_xc_namespace:             ${{ vars.XC_NAMESPACE }}
+      TF_VAR_app_domain:               ${{ vars.APP_DOMAIN }}
+      TF_VAR_aws_access_key:           ${{ secrets.AWS_ACCESS_KEY }}
+      TF_VAR_aws_secret_key:           ${{ secrets.AWS_SECRET_KEY }}
+      VES_P12_PASSWORD:                ${{ secrets.XC_P12_PASSWORD }}
+      VOLT_API_P12_FILE:               api.p12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Derive SSH public key
+        run: |
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/ssh_private_key
+          chmod 600 /tmp/ssh_private_key
+          SSH_PUBLIC_KEY=$(ssh-keygen -y -f /tmp/ssh_private_key)
+          rm -f /tmp/ssh_private_key
+          echo "TF_VAR_ssh_key=${SSH_PUBLIC_KEY}" >> $GITHUB_ENV
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Setup Terraform Backend
+        id: backend
+        run: |
+          cat > backend.tf << EOF
+          terraform {
+            cloud {
+              organization = "${{ secrets.TF_CLOUD_ORGANIZATION }}"
+              workspaces {
+                name = "${{ vars.TF_CLOUD_WORKSPACE_AWS_XC }}"
+              }
+            }
+          }
+          EOF
+          echo "${{ secrets.XC_API_P12_FILE }}" | base64 -d > api.p12
+
+      - name: Terraform Init
+        id: init
+        run: terraform init
+
+      - name: Terraform Destroy
+        run: terraform destroy -auto-approve -input=false
+
+  terraform_vm:
+    name: "AWS VM"
+    runs-on: ubuntu-latest
+    needs: terraform_xc
+    defaults:
+      run:
+        working-directory: ./waf-re-ac-aws/vm
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_KEY }}
+      TF_VAR_tf_cloud_organization: ${{ secrets.TF_CLOUD_ORGANIZATION }}
+      TF_VAR_tf_cloud_workspace_infra: ${{ vars.TF_CLOUD_WORKSPACE_AWS_INFRA }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Derive SSH public key
+        run: |
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/ssh_private_key
+          chmod 600 /tmp/ssh_private_key
+          SSH_PUBLIC_KEY=$(ssh-keygen -y -f /tmp/ssh_private_key)
+          rm -f /tmp/ssh_private_key
+          echo "TF_VAR_ssh_key=${SSH_PUBLIC_KEY}" >> $GITHUB_ENV
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Setup Terraform Backend
+        id: backend
+        run: |
+          cat > backend.tf << EOF
+          terraform {
+            cloud {
+              organization = "${{ secrets.TF_CLOUD_ORGANIZATION }}"
+              workspaces {
+                name = "${{ vars.TF_CLOUD_WORKSPACE_AWS_VM }}"
+              }
+            }
+          }
+          EOF
+
+      - name: Terraform Init
+        id: init
+        run: terraform init
+
+      - name: Terraform Destroy
+        run: terraform destroy -auto-approve -input=false
+
+  terraform_infra:
+    name: "AWS Infra"
+    runs-on: ubuntu-latest
+    needs: terraform_vm
+    defaults:
+      run:
+        working-directory: ./waf-re-ac-aws/infra
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_KEY }}
+      TF_VAR_aws_region: ${{ vars.AWS_REGION }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Setup Terraform Backend
+        id: backend
+        run: |
+          cat > backend.tf << EOF
+          terraform {
+            cloud {
+              organization = "${{ secrets.TF_CLOUD_ORGANIZATION }}"
+              workspaces {
+                name = "${{ vars.TF_CLOUD_WORKSPACE_AWS_INFRA }}"
+              }
+            }
+          }
+          EOF
+
+      - name: Terraform Init
+        id: init
+        run: terraform init
+
+      - name: Terraform Destroy
+        run: terraform destroy -auto-approve -input=false

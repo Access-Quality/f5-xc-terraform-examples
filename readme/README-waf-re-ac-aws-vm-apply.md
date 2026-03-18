@@ -1,0 +1,302 @@
+# WAF en RE + AppConnect (VM en AWS) — Apply
+
+Este workflow despliega una solución de **Web Application Firewall (WAF) con F5 Distributed Cloud sobre el Regional Edge (RE) y AppConnect**, protegiendo la aplicación **DVWA** (Damn Vulnerable Web Application) que corre en una instancia EC2 dentro de un VPC **privado** en AWS. A diferencia del caso WAF en RE simple, aquí la aplicación **no necesita una IP pública** y se instala un **Customer Edge (CE) en AWS**: el tráfico de internet llega al RE global de F5 XC y se reenvía a la app a través de un túnel cifrado establecido por el CE (AppConnect).
+
+---
+
+## Resumen de arquitectura y caso de uso
+
+### ¿Para qué sirve este laboratorio?
+
+| Capacidad                       | Descripción                                                                                                          |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| WAF en Regional Edge            | F5 XC inspecciona el tráfico en el RE global antes de reenviarlo a la aplicación.                                   |
+| AppConnect (CE en AWS)          | Un Customer Edge desplegado en AWS crea un túnel cifrado que conecta el RE con la app en la subred privada.          |
+| Aplicación sin IP pública       | La instancia EC2 con DVWA no requiere Elastic IP ni puertos abiertos al exterior.                                   |
+| Aplicación en EC2               | DVWA corre en una instancia EC2 Amazon Linux 2 (vía `dvwa_userdata.sh`).                                            |
+| CE (Customer Edge) en AWS       | Se despliega un CE de F5 XC en AWS que establece el túnel AppConnect entre el RE y la subred privada.               |
+| Modo blocking configurable      | La WAF policy puede operar en modo bloqueo o detección, controlado por la variable `XC_WAF_BLOCKING`.               |
+| Infraestructura efímera         | Todo se provisiona desde cero con Terraform y se destruye con el workflow de destroy.                               |
+| Estado remoto compartido        | Los tres workspaces de TFC comparten estado remoto para pasar outputs (IP del EC2, puerto) entre módulos.           |
+
+### Arquitectura conceptual
+
+```
+Internet
+   │
+   │  HTTP request
+   ▼
+┌─────────────────────────────────────────────────────────┐
+│          F5 Distributed Cloud — Regional Edge (RE)       │
+│                                                          │
+│  • WAF inspection (block/detect mode)                   │
+│  • HTTP Load Balancer                                   │
+│  • Origin Pool → CE AppConnect tunnel                   │
+└─────────────────────────────────────────────────────────┘
+                           │
+                           │  AppConnect tunnel (cifrado)
+                           ▼
+┌─────────────────────────────────────────────────────────┐
+│                      AWS VPC (privado)                   │
+│                                                          │
+│  ┌──────────────────────┐                               │
+│  │  Customer Edge (CE)  │  ← conectado al RE via tunnel │
+│  └──────────────────────┘                               │
+│             │                                            │
+│             │  IP privada                                │
+│             ▼                                            │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │  EC2 Instance (Amazon Linux 2) — sin IP pública  │   │
+│  │                                                  │   │
+│  │  DVWA (dvwa_userdata.sh)                         │   │
+│  └──────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Casos de uso típicos
+
+1. Demostración de WAF en RE con AppConnect para aplicaciones en subredes privadas de AWS.
+2. Laboratorio de protección de apps en EC2 privado — sin necesidad de exponer IPs públicas ni instalar agentes en la VM.
+3. Validación de políticas WAF de F5 XC (bloqueo de SQLi, XSS, ataques OWASP Top 10) con conectividad AppConnect.
+4. Entorno de pruebas efímero para workshops y capacitaciones de F5 Distributed Cloud (RE + AppConnect + CE en AWS).
+5. Comparación de modelos de publicación: RE con IP pública (caso 4) vs. RE + CE AppConnect en AWS (caso 5).
+
+### Componentes desplegados
+
+```
+waf-re-ac-aws/infra  ──►  VPC + Subnet privada + Internet Gateway + Security Groups
+        │
+        ▼
+waf-re-ac-aws/vm     ──►  EC2 (DVWA) + CE (Customer Edge) en AWS + Key Pair SSH
+        │
+        ▼
+waf-re-ac-aws/xc     ──►  XC Namespace + CE Site + Origin Pool (via CE) + HTTP LB + WAF Policy (RE)
+```
+
+---
+
+## Objetivo del workflow
+
+1. Crear (o verificar) los tres workspaces de Terraform Cloud con modo de ejecución `local` y Remote State Sharing habilitado entre ellos.
+2. Aprovisionar la infraestructura de red en AWS: VPC, subred, Internet Gateway, Route Table y Security Groups.
+3. Desplegar la instancia EC2 con la aplicación **DVWA** (via `dvwa_userdata.sh`) y el **CE (Customer Edge)** de F5 XC en AWS.
+4. Configurar en F5 Distributed Cloud el namespace, el CE site, la WAF policy, el Origin Pool (apuntando a la IP privada de la EC2 vía CE) y el HTTP Load Balancer publicado en el **Regional Edge**.
+
+---
+
+## Triggers
+
+```yaml
+on:
+  workflow_dispatch:
+```
+
+- **`workflow_dispatch`:** ejecución manual desde la pestaña **Actions** de GitHub.
+
+---
+
+## Secretos requeridos
+
+Configurar en **Settings → Secrets and variables → Secrets**:
+
+### Terraform Cloud
+
+| Secreto                 | Descripción                                  |
+| ----------------------- | -------------------------------------------- |
+| `TF_API_TOKEN`          | Token de API de Terraform Cloud              |
+| `TF_CLOUD_ORGANIZATION` | Nombre de la organización en Terraform Cloud |
+
+### AWS
+
+| Secreto            | Descripción                              |
+| ------------------ | ---------------------------------------- |
+| `AWS_ACCESS_KEY`   | Access Key ID de la cuenta AWS           |
+| `AWS_SECRET_KEY`   | Secret Access Key de la cuenta AWS       |
+
+### F5 Distributed Cloud
+
+| Secreto           | Descripción                                                             |
+| ----------------- | ----------------------------------------------------------------------- |
+| `XC_API_URL`      | URL de la API de F5 XC (`https://<tenant>.console.ves.volterra.io/api`) |
+| `XC_P12_PASSWORD` | Contraseña del certificado `.p12` de F5 XC                              |
+| `XC_API_P12_FILE` | Certificado API de F5 XC en formato `.p12` codificado en **base64**     |
+
+### SSH
+
+| Secreto           | Descripción                                                                                          |
+| ----------------- | ---------------------------------------------------------------------------------------------------- |
+| `SSH_PRIVATE_KEY` | Llave privada SSH (la pública se deriva en runtime con `ssh-keygen -y`). Usada en el EC2 Key Pair.  |
+
+---
+
+## Variables requeridas
+
+Configurar en **Settings → Secrets and variables → Variables**:
+
+### Terraform Cloud — Workspaces
+
+| Variable                        | Ejemplo                    | Descripción                                        |
+| ------------------------------- | -------------------------- | -------------------------------------------------- |
+| `TF_CLOUD_WORKSPACE_AWS_INFRA`  | `waf-re-ac-aws-infra`      | Nombre del workspace de TFC para AWS Infra         |
+| `TF_CLOUD_WORKSPACE_AWS_VM`     | `waf-re-ac-aws-vm`         | Nombre del workspace de TFC para la VM (EC2 + CE)  |
+| `TF_CLOUD_WORKSPACE_AWS_XC`     | `waf-re-ac-aws-xc`         | Nombre del workspace de TFC para F5 XC             |
+
+### Infraestructura
+
+| Variable         | Ejemplo      | Descripción                                         |
+| ---------------- | ------------ | --------------------------------------------------- |
+| `AWS_REGION`     | `us-east-1`  | Región de AWS donde se despliegan los recursos      |
+
+### Aplicación y F5 XC
+
+| Variable           | Ejemplo                          | Descripción                                                 |
+| ------------------ | -------------------------------- | ----------------------------------------------------------- |
+| `XC_NAMESPACE`     | `arcadia-prod`                   | Namespace de F5 XC donde se crea el LB y WAF               |
+| `APP_DOMAIN`       | `arcadia-aws-ac.example.com`     | FQDN de la aplicación en el HTTP LB de F5 XC               |
+
+---
+
+## Jobs principales
+
+### `terraform_infra` — AWS Infra
+
+- **Módulo:** `waf-re-ac-aws/infra`
+- **Workspace TFC:** `TF_CLOUD_WORKSPACE_AWS_INFRA`
+- **Qué crea:**
+  - VPC con DNS habilitado.
+  - Internet Gateway y Route Table.
+  - Subredes (pública para el CE, privada para la EC2).
+  - Security Groups con reglas para tráfico HTTP/HTTPS interno y acceso SSH.
+- **Outputs:** IDs de VPC, subredes y SGs (consumidos por `terraform_vm` vía estado remoto).
+
+### `terraform_vm` — AWS VM + CE
+
+- **Módulo:** `waf-re-ac-aws/vm`
+- **Workspace TFC:** `TF_CLOUD_WORKSPACE_AWS_VM`
+- **Depende de:** `terraform_infra`
+- **Qué crea:**
+  - Key Pair SSH (public key derivada en runtime desde `SSH_PRIVATE_KEY` con `ssh-keygen -y`).
+  - Instancia EC2 Amazon Linux 2 con `dvwa_userdata.sh` para instalar y levantar DVWA.
+  - CE (Customer Edge) de F5 XC instalado en AWS que establece el túnel AppConnect hacia el RE.
+- **Nota:** usa estado remoto de `waf-re-ac-aws/infra` para obtener IDs de subred y SG.
+- **Outputs:** IP privada del EC2 y configuración del CE (consumidos por `terraform_xc`).
+
+### `terraform_xc` — F5XC WAF + AppConnect
+
+- **Módulo:** `waf-re-ac-aws/xc`
+- **Workspace TFC:** `TF_CLOUD_WORKSPACE_AWS_XC`
+- **Depende de:** `terraform_vm`
+- **Qué crea / configura:**
+  - Namespace de F5 XC.
+  - Registro y configuración del CE site de AWS.
+  - WAF Policy (`volterra_app_firewall`) en modo configurable (blocking/monitoring).
+  - Origin Pool apuntando a la **IP privada** de la EC2 a través del CE site (AppConnect).
+  - HTTP Load Balancer publicado en el Regional Edge.
+- **Parámetros relevantes:**
+
+  | Variable Terraform                | Origen                             | Propósito                                            |
+  | --------------------------------- | ---------------------------------- | ---------------------------------------------------- |
+  | `TF_VAR_tf_cloud_workspace_infra` | `TF_CLOUD_WORKSPACE_AWS_INFRA`     | Estado remoto de infra (VPC/subnet IDs)              |
+  | `TF_VAR_tf_cloud_workspace_vm`    | `TF_CLOUD_WORKSPACE_AWS_VM`        | Estado remoto de VM (IP privada EC2, CE config)      |
+  | `TF_VAR_aws_access_key`           | `AWS_ACCESS_KEY` (secret)          | Credenciales AWS para el CE site                     |
+  | `TF_VAR_aws_secret_key`           | `AWS_SECRET_KEY` (secret)          | Credenciales AWS para el CE site                     |
+  | `TF_VAR_xc_namespace`             | `XC_NAMESPACE` (var)               | Namespace de F5 XC                                   |
+  | `TF_VAR_app_domain`               | `APP_DOMAIN` (var)                 | FQDN del HTTP LB                                     |
+
+---
+
+## Arquitectura desplegada por el workflow
+
+```mermaid
+flowchart LR
+  INET[Internet]
+
+  subgraph XC_PLATFORM[F5 Distributed Cloud — Regional Edge]
+    XC_LB[HTTP Load Balancer\nRE public VIP]
+    XC_WAF[WAF Policy\nblocking / monitoring]
+    XC_NS[XC Namespace]
+    XC_NS --> XC_LB
+    XC_LB --> XC_WAF
+  end
+
+  subgraph AWS_VPC[AWS VPC privado]
+    CE[Customer Edge\nAppConnect tunnel]
+
+    subgraph EC2[EC2 Instance — Amazon Linux 2]
+      PRIV_IP[IP privada]
+      ARCADIA[Arcadia Finance\nDocker Compose]
+      PRIV_IP --> ARCADIA
+    end
+
+    CE -->|IP privada| PRIV_IP
+  end
+
+  INET -->|HTTP| XC_LB
+  XC_LB -->|AppConnect tunnel| CE
+```
+
+---
+
+## Troubleshooting rápido
+
+- **Error al decodificar el P12 (`exit code 58`):**
+  Confirmar que `XC_API_P12_FILE` esté codificado en base64 correctamente:
+
+  ```bash
+  base64 -i api.p12 | pbcopy   # macOS
+  base64 api.p12 | xclip       # Linux
+  ```
+
+- **CE site no aparece como `ONLINE` en XC:**
+  Los CE sites pueden tardar **15-20 minutos** en registrarse y aparecer en línea. Verificar el estado en la consola de F5 XC → **Infrastructure → Sites**.
+
+- **Arcadia Finance no responde desde el Origin Pool:**
+  La app corre via `userdata.sh` al lanzar la EC2. Puede tardar 2-3 minutos. Verificar con:
+
+  La app DVWA corre via `dvwa_userdata.sh` al lanzar la EC2. Puede tardar 2-3 minutos. Verificar con:
+
+  ```bash
+  ssh -i <private_key> ec2-user@<IP> "sudo cat /var/log/cloud-init-output.log"
+  ```
+
+- **Workspace TFC no encontrado durante `terraform init`:**
+  Verificar que `TF_CLOUD_WORKSPACE_AWS_INFRA`, `TF_CLOUD_WORKSPACE_AWS_VM` y `TF_CLOUD_WORKSPACE_AWS_XC` estén configuradas correctamente y que `TF_API_TOKEN` tenga permisos sobre la organización.
+
+- **Plan fallido en `terraform_xc` por estado remoto vacío:**
+  El job `terraform_xc` depende de los outputs de los dos jobs anteriores. Si alguno no tiene estado, re-ejecutar el workflow completo.
+
+---
+
+## Ejecución manual
+
+1. Ir a **Actions** en GitHub.
+2. Seleccionar el workflow: **F5XC WAF on RE + AppConnect AWS Deploy**.
+3. Hacer clic en **Run workflow**.
+4. Confirmar la ejecución. No hay inputs adicionales.
+
+### Criterios de éxito
+
+- Los tres jobs (`terraform_infra`, `terraform_vm`, `terraform_xc`) terminan en estado `success`.
+- El CE site aparece como `ONLINE` en la consola de F5 XC → **Infrastructure → Sites**.
+- El HTTP Load Balancer está publicado en el Regional Edge.
+- La aplicación Arcadia Finance es accesible desde internet a través del dominio configurado en `APP_DOMAIN`.
+
+---
+
+## Destroy del laboratorio
+
+El archivo [`.github/workflows/waf-re-ac-aws-vm-destroy.yml`](../.github/workflows/waf-re-ac-aws-vm-destroy.yml) destruye **todos** los recursos creados por el apply en orden inverso.
+
+**Trigger:** `workflow_dispatch` — ejecución manual desde GitHub Actions.
+
+### Orden de destrucción
+
+```
+terraform_xc     (1° — elimina LB, WAF policy, CE site config, Origin Pool, namespace XC)
+      │
+      ▼
+terraform_vm     (2° — elimina EC2, CE, Key Pair)
+      │
+      ▼
+terraform_infra  (3° — elimina VPC, subredes, SGs, Internet Gateway)
+```

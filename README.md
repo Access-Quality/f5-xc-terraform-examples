@@ -40,13 +40,22 @@ Despliega un **Web Application Firewall (WAF) sobre el Regional Edge (RE) de F5 
 
 ---
 
+### 5. WAF en RE + AppConnect (VM en AWS) — `waf-re-ac-aws-vm-apply.yml`
+
+Despliega un **Web Application Firewall (WAF) sobre el Regional Edge (RE) de F5 Distributed Cloud con AppConnect**, protegiendo la aplicación **DVWA** (Damn Vulnerable Web Application) que corre en una instancia EC2 dentro de un VPC privado en AWS. A diferencia del caso 4, la aplicación **no necesita una IP pública** y se instala un **Customer Edge (CE) en AWS**: el tráfico llega al RE global de F5 XC y se reenvía a la app a través de un túnel cifrado establecido por el CE. Esto permite exponer aplicaciones en subredes privadas sin abrir puertos al exterior, combinando seguridad WAF en el RE con conectividad AppConnect.
+
+👉 [Ver guía completa](readme/README-waf-re-ac-aws-vm-apply.md)
+
+---
+
 ### Archivos de Flujo de Trabajo
 
-| **Workflow**                               | **Guía**                                                         |
-| ------------------------------------------ | ---------------------------------------------------------------- |
-| `teachable-01-mc-networkconnect-apply.yml` | [README](readme/README-teachable-01-mcn-networkconnect-apply.md) |
-| `bookinfo-smcn-apply.yaml`                 | [README](readme/README-bookinfo-smcn-apply.md)                   |
-| `waf-on-ce-az-apply.yml`                   | [README](readme/README-waf-on-ce-az-apply.md)                    |
-| `waf-re-aws-apply.yml`                     | [README](readme/README-waf-re-aws-apply.md)                      |
+| **Workflow**                               | **Guía**                                                              |
+| ------------------------------------------ | --------------------------------------------------------------------- |
+| `teachable-01-mc-networkconnect-apply.yml` | [README](readme/README-teachable-01-mcn-networkconnect-apply.md)      |
+| `bookinfo-smcn-apply.yaml`                 | [README](readme/README-bookinfo-smcn-apply.md)                        |
+| `waf-on-ce-az-apply.yml`                   | [README](readme/README-waf-on-ce-az-apply.md)                         |
+| `waf-re-aws-apply.yml`                     | [README](readme/README-waf-re-aws-apply.md)                           |
+| `waf-re-ac-aws-vm-apply.yml`               | [README](readme/README-waf-re-ac-aws-vm-apply.md)                     |
 
 ---
