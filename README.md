@@ -32,6 +32,14 @@ Despliega un **Web Application Firewall (WAF) sobre un Customer Edge (CE) de F5 
 
 ---
 
+### 4. WAF en RE (Aplicación en AWS) — `waf-re-aws-apply.yml`
+
+Despliega un **Web Application Firewall (WAF) sobre el Regional Edge (RE) de F5 Distributed Cloud**, protegiendo la aplicación **Arcadia Finance** que corre en una instancia EC2 dentro de un VPC en AWS. A diferencia del caso anterior, el tráfico de internet pasa por el RE global de F5 XC antes de llegar a la aplicación, sin necesidad de instalar un Customer Edge en la infraestructura del cliente. El HTTP Load Balancer se publica con una VIP pública en el RE y la WAF policy puede configurarse en modo bloqueo o detección.
+
+👉 [Ver guía completa](readme/README-waf-re-aws-apply.md)
+
+---
+
 ### Archivos de Flujo de Trabajo
 
 | **Workflow**                               | **Guía**                                                         |
@@ -39,5 +47,6 @@ Despliega un **Web Application Firewall (WAF) sobre un Customer Edge (CE) de F5 
 | `teachable-01-mc-networkconnect-apply.yml` | [README](readme/README-teachable-01-mcn-networkconnect-apply.md) |
 | `bookinfo-smcn-apply.yaml`                 | [README](readme/README-bookinfo-smcn-apply.md)                   |
 | `waf-on-ce-az-apply.yml`                   | [README](readme/README-waf-on-ce-az-apply.md)                    |
+| `waf-re-aws-apply.yml`                     | [README](readme/README-waf-re-aws-apply.md)                      |
 
 ---
