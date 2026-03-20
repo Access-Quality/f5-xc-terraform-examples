@@ -251,6 +251,7 @@ jobs:
       TF_VAR_xc_namespace: ${{ vars.XC_NAMESPACE }}
       TF_VAR_app_domain: ${{ vars.APP_DOMAIN }}
       TF_VAR_az_ce_site: "true"
+      TF_VAR_azure_xc_machine_type: "Standard_D4s_v4"
       TF_VAR_advertise_sites: "true"
       TF_VAR_ip_address_on_site_pool: "true"
       TF_VAR_http_only: "true"
