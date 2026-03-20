@@ -8,62 +8,137 @@ Este workflow despliega una solución de **Web Application Firewall (WAF) con F5
 
 ### ¿Para qué sirve este laboratorio?
 
-| Capacidad                      | Descripción                                                                                 |
-| ------------------------------ | ------------------------------------------------------------------------------------------- |
-| WAF en CE                      | F5 XC actúa como WAF sobre el Customer Edge en Azure, sin pasar por Regional Edge (RE).     |
-| Protección de aplicaciones AKS | La aplicación Online Boutique corre en AKS con Load Balancer interno (no expuesto directo). |
-| Tráfico HTTP-only              | El LB de F5 XC se configura en modo HTTP solamente (no requiere certificado ACME).          |
-| Infraestructura efímera        | Todo se provisiona desde cero con Terraform y se destruye con el workflow de destroy.       |
-| Estado remoto compartido       | Los tres workspaces de TFC comparten estado remoto para pasar outputs entre módulos.        |
+| Capacidad                      | Descripción                                                                                                             |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| WAF en CE                      | F5 XC actúa como WAF sobre **1 Customer Edge** en Azure en modo Ingress Gateway, sin pasar por Regional Edge (RE).     |
+| Protección de aplicaciones AKS | La aplicación Online Boutique corre en AKS con un **Azure Internal Load Balancer** (sin IP pública directa).           |
+| Tráfico HTTP-only              | El HTTP LB de F5 XC escucha en **puerto 80** solamente; no requiere certificado TLS ni delegación de dominio.           |
+| Ingress tipo `advertise_custom` | El LB se anuncia **solo en el CE Site** (`advertise_sites = true`), no en el Regional Edge global de F5 XC.            |
+| Infraestructura efímera        | Todo se provisiona desde cero con Terraform y se destruye con el workflow de destroy.                                   |
+| Estado remoto compartido       | Los tres workspaces de TFC comparten estado remoto para pasar outputs entre módulos.                                    |
 
 ### Arquitectura conceptual
 
 ```
 Internet
    │
-   │  HTTP request
+   │  HTTP :80
    ▼
-┌──────────────────────────────────────────────────────┐
-│                  Azure VNet                           │
-│                                                       │
-│  ┌─────────────────────────────────────────────────┐  │
-│  │  F5 XC Customer Edge (CE) — Azure VM            │  │
-│  │                                                  │  │
-│  │  • WAF inspection                               │  │
-│  │  • HTTP Load Balancer                           │  │
-│  │  • advertise_sites = true                       │  │
-│  └────────────────────┬────────────────────────────┘  │
-│                       │                               │
-│                       │  Forward (origin pool)        │
-│                       ▼                               │
-│  ┌─────────────────────────────────────────────────┐  │
-│  │  AKS Cluster (private)                          │  │
-│  │                                                  │  │
-│  │  Internal LoadBalancer (kubernetes-internal)    │  │
-│  │       │                                         │  │
-│  │       ▼                                         │  │
-│  │  Online Boutique (Google microservices-demo)    │  │
-│  └─────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────┐
+│  Azure VNet  (azure-infra — 1 VNet, 1 subnet)                   │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │  F5 XC Customer Edge — 1 VM (Standard_D4s_v4, 80 GB)    │   │
+│  │  Certified HW: azure-byol-voltmesh                       │   │
+│  │  Modo: Ingress Gateway (1 NIC — outside)                 │   │
+│  │  AZ: 1 | Subnet: ce_waap_az_subnet                       │   │
+│  │                                                           │   │
+│  │  • WAF policy (modo monitoring por defecto)              │   │
+│  │  • HTTP Load Balancer — advertise_custom en CE Site      │   │
+│  │  • Origin pool: private_ip / outside_network             │   │
+│  └──────────────────────┬────────────────────────────────────┘  │
+│                         │  VNet Peering (bidireccional)         │
+│                         ▼                                        │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │  AKS VNet  (creada por AKS, pereada con azure-infra)     │   │
+│  │                                                           │   │
+│  │  AKS Cluster — 1 nodo (Standard_D4s_v3)                  │   │
+│  │  Network plugin: Azure CNI | Auto-scaling: deshabilitado  │   │
+│  │                                                           │   │
+│  │  Service: frontend (type: LoadBalancer)                   │   │
+│  │  Annotation: azure-load-balancer-internal = "true"        │   │
+│  │  → Azure Internal LB (IP privada, puerto 80→8080)        │   │
+│  │       │                                                   │   │
+│  │       ▼                                                   │   │
+│  │  Online Boutique v0.8.0 (Google microservices-demo)       │   │
+│  │  11 microservicios — imágenes gcr.io/google-samples       │   │
+│  └──────────────────────────────────────────────────────────┘   │
+└────────────────────────────────────────────────────────────────┘
 ```
+
+### Detalles de infraestructura
+
+#### Customer Edge (CE)
+
+| Parámetro            | Valor                    |
+| -------------------- | ------------------------ |
+| Cantidad de CEs      | **1**                    |
+| Tipo de VM (Azure)   | `Standard_D4s_v4`        |
+| Hardware certificado | `azure-byol-voltmesh`    |
+| Modo CE              | **Ingress Gateway** (1 NIC — outside únicamente; no tiene NIC de inside/egress separada) |
+| Availability Zone    | AZ 1                     |
+| Disco del OS         | 80 GB                    |
+| Subnet               | `ce_waap_az_subnet` (de azure-infra VNet) |
+| Tiempo de validación | 70 s (`null_resource.validation-wait`) + apply TF Params |
+
+#### HTTP Load Balancer (F5 XC)
+
+| Parámetro              | Valor                                           |
+| ---------------------- | ----------------------------------------------- |
+| Tipo                   | HTTP (no HTTPS, no auto-cert)                   |
+| Puerto                 | 80                                              |
+| Método de advertise    | `advertise_custom` → solo en el CE Site         |
+| Network de advertise   | `SITE_NETWORK_INSIDE_AND_OUTSIDE`               |
+| WAF mode               | Monitoring (default; `xc_waf_blocking = false`) |
+| Selección de endpoints | `LOCAL_PREFERRED`                               |
+| Algoritmo de LB        | `LB_OVERRIDE`                                   |
+
+#### Origin Pool
+
+| Parámetro        | Valor                                                        |
+| ---------------- | ------------------------------------------------------------ |
+| Tipo de servidor | `private_ip` con `outside_network = true`                   |
+| IP destino       | IP interna del Azure Internal LB del AKS (`ip_address_on_site_pool = true`) |
+| Puerto destino   | 80                                                           |
+| TLS al origen    | No (`no_tls = true`)                                         |
+
+#### AKS Cluster
+
+| Parámetro         | Valor               |
+| ----------------- | ------------------- |
+| Nodos             | 1                   |
+| VM size           | `Standard_D4s_v3`   |
+| Network plugin    | Azure CNI           |
+| Auto-scaling      | Deshabilitado       |
+| Identidad         | SystemAssigned      |
+| Ingress de la app | Service `LoadBalancer` con `azure-load-balancer-internal: "true"` → Azure Internal LB (solo IP privada) |
+| VNet              | Separada de azure-infra; conectada por VNet Peering bidireccional |
+
+#### Networking
+
+| Recurso                  | Detalle                                                                      |
+| ------------------------ | ---------------------------------------------------------------------------- |
+| VNet azure-infra         | 1 VNet con 1 subnet (`ce_waap_az_subnet`) para el CE                         |
+| VNet AKS                 | Creada automáticamente por AKS (`use_new_vnet = true`)                       |
+| VNet Peering             | Bidireccional (`peer_a2b` + `peer_b2a`) con `allow_forwarded_traffic = true` |
+| Tiempo de espera para LB | 90 s (`time_sleep.wait_30_seconds`) para que el Internal LB adquiera IP      |
 
 ### Casos de uso típicos
 
 1. Demostración de WAF on CE sin necesidad de dominio público ni certificado TLS.
 2. Laboratorio de protección de aplicaciones containerizadas en AKS con F5 XC.
-3. Validación de políticas WAF de F5 XC sobre tráfico a microservicios.
+3. Validación de políticas WAF de F5 XC (modo monitoring) sobre tráfico a microservicios.
 4. Entorno de pruebas efímero para workshops y capacitaciones de F5 Distributed Cloud.
 
 ### Componentes desplegados
 
 ```
-azure/azure-infra  ──►  VNet + Subnets + Security Groups (Azure)
+azure/azure-infra  ──►  1 VNet + 1 Subnet (ce_waap_az_subnet) + Resource Group
         │
+        │  (Remote State: VNet ID, Subnet ID, Resource Group)
         ▼
-azure/aks-cluster  ──►  AKS Cluster + Online Boutique (manifest.yaml)
-        │                      CE WAAP VM (via XC Terraform provider)
+azure/aks-cluster  ──►  1 AKS Cluster (1 nodo Standard_D4s_v3, Azure CNI)
+        │                Online Boutique v0.8.0 (manifest.yaml — kubectl apply)
+        │                Service frontend: Internal Azure LB (:80→:8080)
+        │                VNet Peering bidireccional con azure-infra VNet
+        │
+        │  (Remote State: IP del Internal LB)
         ▼
-xc/                ──►  XC Namespace + Azure CE Site + HTTP LB + WAF Policy
+xc/                ──►  XC Namespace (creado vía API curl)
+                         1 Azure CE Site (1 VM ingress_gw, azure-byol-voltmesh)
+                         1 Origin Pool (private_ip, outside_network, no TLS)
+                         1 HTTP Load Balancer (puerto 80, advertise en CE Site)
+                         1 WAF Policy (volterra_app_firewall, modo monitoring)
 ```
 
 ---
@@ -169,42 +244,47 @@ Crea o actualiza los tres workspaces en Terraform Cloud vía la API REST:
 - **Módulo:** `azure/azure-infra`
 - **Workspace TFC:** `TF_CLOUD_WORKSPACE_AZURE_INFRA`
 - **Qué crea:**
-  - Virtual Network de Azure con subredes (outside, inside, workload).
-  - Network Security Groups y reglas de acceso.
-  - Recursos de soporte necesarios para CE y AKS.
-- **Configuración especial:** escribe `github.auto.tfvars` con `aks-cluster = true` para habilitar solo los recursos necesarios para este laboratorio.
+  - 1 Resource Group y 1 Virtual Network de Azure.
+  - 1 subnet (`ce_waap_az_subnet`) donde se conectará la NIC del CE.
+  - **No crea** NSGs ni Security Groups adicionales en este módulo (solo la VNet y subnet básica).
+- **Configuración especial:** escribe `github.auto.tfvars` con `aks-cluster = true` (y el resto en `false`) para habilitar únicamente los recursos de red de VNet+subnet necesarios para este laboratorio, excluyendo NGINX, BIG-IP, etc.
+- **Outputs que comparte:** ID de VNet, nombre de VNet, nombre de Resource Group, nombre de subnet — consumidos por `xc/` vía Remote State.
 
 ### `terraform_aks` — Azure AKS
 
 - **Módulo:** `azure/aks-cluster`
 - **Workspace TFC:** `TF_CLOUD_WORKSPACE_AKS_CLUSTER`
 - **Qué crea:**
-  - Clúster AKS privado.
-  - Deployment de la aplicación **Online Boutique** via `manifest.yaml`.
-  - Servicio `frontend` como `LoadBalancer` interno (`azure-load-balancer-internal: "true"`).
-  - Ce WAAP VM (Customer Edge de F5 XC dentro del AKS VNet).
-- **Nota:** usa estado remoto de `azure-infra` para obtener IDs de red.
+  - 1 clúster AKS con 1 nodo (`Standard_D4s_v3`), identidad `SystemAssigned`, network plugin `azure` (Azure CNI), auto-scaling deshabilitado.
+  - Deployment de **Online Boutique v0.8.0** (11 microservicios) vía `kubectl apply -f manifest.yaml` (kubectl se descarga en runtime).
+  - Service `frontend` tipo `LoadBalancer` con la annotation `azure-load-balancer-internal: "true"` → Azure Internal LB con IP privada, puerto 80 → 8080.
+  - VNet Peering bidireccional (`peer_a2b` + `peer_b2a`) entre la VNet de AKS y la VNet de azure-infra para que el CE pueda alcanzar el Internal LB.
+  - `time_sleep` de 90 segundos para que el Internal LB tenga IP asignada antes de que XC intente conectarse.
+- **Nota:** usa `TF_VAR_use_new_vnet = "true"` para que el nodo AKS cree su propia VNet y se peree, en lugar de reutilizar la subnet de azure-infra.
 
 ### `terraform_xc_lb` — F5XC WAF
 
 - **Módulo:** `xc/`
 - **Workspace TFC:** `TF_CLOUD_WORKSPACE_XC_DEPLOY`
 - **Qué crea / configura:**
-  - Namespace de F5 XC (creado vía API curl antes de Terraform si no existe).
-  - Azure CE Site (modo `az_ce_site = true`).
-  - HTTP Load Balancer con WAF policy (HTTP only, sin TLS).
-  - Origin Pool apuntando al Internal LB del AKS (`ip_address_on_site_pool = true`).
-  - Advertise en el sitio CE (`advertise_sites = true`).
+  - Namespace de F5 XC (creado vía API REST con curl + cert/key del P12, antes de Terraform; `200` y `409` son aceptados).
+  - `volterra_cloud_credentials` con las credenciales del Service Principal de Azure.
+  - 1 Azure VNET Site (`volterra_azure_vnet_site`) en modo **Ingress Gateway** (`ingress_gw`): 1 VM `Standard_D4s_v4`, hardware `azure-byol-voltmesh`, AZ 1, disco 80 GB, subnet `ce_waap_az_subnet` de la VNet existente de azure-infra.
+  - `null_resource.validation-wait` (sleep 70 s) + `volterra_tf_params_action` (`action = "apply"`, `wait_for_action = true`) para aprovisionar el CE en Azure vía la plataforma XC.
+  - 1 Origin Pool (`volterra_origin_pool`) tipo `private_ip` + `outside_network = true` apuntando a la IP del Internal LB del AKS; sin TLS al origen (`no_tls = true`), puerto 80.
+  - 1 HTTP Load Balancer (`volterra_http_loadbalancer`) en puerto 80, advertise con `advertise_custom` → `SITE_NETWORK_INSIDE_AND_OUTSIDE` sobre el CE Site.
+  - 1 WAF Policy (`volterra_app_firewall`) en **modo monitoring** (el workflow no setea `xc_waf_blocking`, por lo que usa el default `false`).
 - **Parámetros fijos en el job:**
 
-  | Variable Terraform               | Valor  | Propósito                                     |
-  | -------------------------------- | ------ | --------------------------------------------- |
-  | `TF_VAR_az_ce_site`              | `true` | Registra el CE como Azure CE Site en F5 XC    |
-  | `TF_VAR_advertise_sites`         | `true` | Publica el LB en el CE (no en RE)             |
-  | `TF_VAR_ip_address_on_site_pool` | `true` | Usa IP directa del AKS LB en el origin pool   |
-  | `TF_VAR_http_only`               | `true` | HTTP solamente (no requiere certificado ACME) |
+  | Variable Terraform               | Valor              | Propósito                                                    |
+  | -------------------------------- | ------------------ | ------------------------------------------------------------ |
+  | `TF_VAR_az_ce_site`              | `true`             | Crea el Azure CE Site (`volterra_azure_vnet_site`)           |
+  | `TF_VAR_azure_xc_machine_type`   | `Standard_D4s_v4`  | Tamaño de VM del CE en Azure                                 |
+  | `TF_VAR_advertise_sites`         | `true`             | Usa `advertise_custom` (solo en CE Site, no en RE global)    |
+  | `TF_VAR_ip_address_on_site_pool` | `true`             | Origin pool: `private_ip` con la IP del Internal LB del AKS |
+  | `TF_VAR_http_only`               | `true`             | HTTP port 80 (sin HTTPS, sin auto-cert, sin delegación DNS)  |
 
-- **Pre-step especial:** extrae cert/key del `.p12` con `openssl pkcs12 -legacy` para crear el namespace vía curl si no existe (respuestas `200` y `409` son aceptadas).
+- **Pre-step especial:** la llave SSH pública se deriva de la privada en runtime con `ssh-keygen -y` e inyectada como `TF_VAR_ssh_key` vía `$GITHUB_ENV`. El cert/key del P12 se extrae con `openssl pkcs12 -legacy` (compatible con OpenSSL 3.x).
 
 ---
 
@@ -214,28 +294,32 @@ Crea o actualiza los tres workspaces en Terraform Cloud vía la API REST:
 flowchart LR
   INET[Internet]
 
-  subgraph AZ_VNET[Azure VNet]
-    CE[F5 XC CE — Azure VM\nWAF + HTTP LB\nadvertise_sites=true]
-
-    subgraph AKS[AKS Cluster privado]
-      ILB[Internal LoadBalancer\nkubernetes-internal]
-      BOUTIQUE[Online Boutique\nGoogle microservices-demo v0.8.0]
-      ILB --> BOUTIQUE
-    end
-
-    CE -->|origin pool\nip_address_on_site_pool| ILB
+  subgraph AZ_VNET[azure-infra VNet — 1 subnet]
+    CE["F5 XC CE — 1 VM\nStandard_D4s_v4 | 80 GB\naztire-byol-voltmesh\nModo: Ingress Gateway (1 NIC outside)\nAZ 1\n\nHTTP LB :80 — advertise_custom\nWAF Policy — modo monitoring\nOrigin pool: private_ip / outside_network"]
   end
 
-  subgraph XC_PLATFORM[F5 Distributed Cloud Platform]
-    AZ_SITE[Azure CE Site]
-    XC_LB[HTTP Load Balancer + WAF Policy]
-    XC_NS[XC Namespace]
+  subgraph AKS_VNET[AKS VNet — pereada con azure-infra]
+    subgraph AKS["AKS Cluster — 1 nodo Standard_D4s_v3\nAzure CNI"]
+      ILB["Service: frontend\ntype: LoadBalancer\nazure-load-balancer-internal=true\nInternal Azure LB\n:80 → :8080"]
+      BOUTIQUE["Online Boutique v0.8.0\n11 microservicios\ngcr.io/google-samples"]
+      ILB --> BOUTIQUE
+    end
+  end
+
+  subgraph XC_PLATFORM[F5 Distributed Cloud]
+    AZ_SITE[Azure VNET Site\nvolterra_azure_vnet_site]
+    XC_LB["HTTP Load Balancer\nvolterra_http_loadbalancer\npuerto 80"]
+    XC_WAF["WAF Policy\nvolterra_app_firewall\nmodo monitoring"]
+    XC_NS[XC Namespace\ncreado vía API REST]
+    XC_LB --> XC_WAF
     XC_LB --> AZ_SITE
     XC_NS --> XC_LB
   end
 
-  INET -->|HTTP| CE
-  AZ_SITE -.manages.-> CE
+  INET -->|"HTTP :80"| CE
+  CE -->|"origin pool\nprivate_ip / outside_network"| ILB
+  AZ_SITE -.manages CE VM.-> CE
+  AZ_VNET <-->|VNet Peering bidireccional| AKS_VNET
 ```
 
 ---
