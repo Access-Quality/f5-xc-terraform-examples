@@ -1,21 +1,53 @@
-name: "F5XC WAF on CE Deploy"
-# All Terraform variables and secrets are defined in GitHub.
-# TFC workspaces are created automatically by the setup_tfc_workspaces job via
-# the Terraform Cloud API. Each workspace is configured with Execution Mode
-# "local" and Remote State Sharing enabled between all three workspaces.
+name: "F5XC WAF on AZ CE Deploy"
+# Deploys WAF on Customer Edge (CE) in Azure using F5 Distributed Cloud + AKS.
+# Traffic enters the CE (Ingress Gateway mode) over HTTP :80, is inspected by the
+# WAF policy (monitoring mode), and forwarded to Online Boutique running in AKS
+# via an Azure Internal Load Balancer (private IP only).
+#
+# TFC workspaces are created automatically by setup_tfc_workspaces via the
+# Terraform Cloud API. Execution Mode: local. Remote State Sharing enabled:
+#   azure-infra -> aks-cluster, azure-infra -> xc, aks-cluster -> xc
+#
+# Resources deployed per job:
+#   terraform_infra   (azure/azure-infra)
+#     - 1 Resource Group: <prefix>-rg-<suffix>
+#     - 1 VNet + 1 subnet (ce_waap_az_subnet) for the CE NIC
+#
+#   terraform_aks     (azure/aks-cluster)
+#     - AKS cluster: 1 node, Standard_D4s_v3, Azure CNI, SystemAssigned identity
+#     - Online Boutique v0.8.0 deployed via kubectl apply (manifest.yaml)
+#     - Service frontend: type=LoadBalancer, azure-load-balancer-internal=true
+#       -> Azure Internal LB (private IP, port 80->8080) in <prefix>-rg-<suffix>
+#     - VNet Peering (bidirectional) between AKS VNet and azure-infra VNet
+#     - MC_<prefix>-rg-<suffix>_<prefix>-aks-<suffix>_<region>: created by Azure
+#       automatically for AKS managed infrastructure (nodes, NICs, AKS VNet)
+#
+#   terraform_xc_lb   (xc/)
+#     - XC Namespace created via API REST (curl) before Terraform
+#     - 1 Azure VNET Site: 1 VM Standard_D4s_v4, azure-byol-voltmesh, Ingress
+#       Gateway (1 NIC outside), AZ 1, disk 80 GB
+#       -> CE Resource Group: <prefix>-rg-xc-<suffix> (created by F5 XC Platform)
+#     - 1 Origin Pool: private_ip / outside_network, no TLS, port 80
+#     - 1 HTTP Load Balancer: port 80, advertise_custom on CE Site
+#       (SITE_NETWORK_INSIDE_AND_OUTSIDE), WAF policy in monitoring mode
+#
+# Azure Resource Groups created (3 total):
+#   <prefix>-rg-<suffix>                                    - VNet, AKS cluster, Internal LB
+#   <prefix>-rg-xc-<suffix>                                 - CE VM + NIC (created by F5 XC)
+#   MC_<prefix>-rg-<suffix>_<prefix>-aks-<suffix>_<region>  - AKS managed RG (created by Azure)
 #
 # Required GitHub Secrets:
 #   TF_API_TOKEN                      - Terraform Cloud API token
 #   TF_CLOUD_ORGANIZATION             - Terraform Cloud organization name
-#   AZURE_SUBSCRIPTION_ID             - Azure Subscription ID (secret)
-#   AZURE_TENANT_ID                   - Azure Tenant ID (secret)
-#   AZURE_CLIENT_ID                   - Azure Service Principal App ID (secret)
-#   AZURE_CLIENT_SECRET               - Azure Service Principal Password (secret)
-#   SSH_PRIVATE_KEY                   - SSH private key (public key is derived at runtime) (secret)
-#   XC_TENANT                         - F5 XC tenant name (secret)
-#   XC_API_URL                        - F5 XC API URL (secret)
-#   XC_P12_PASSWORD                   - Password for the F5 XC .p12 certificate (secret)
-#   XC_API_P12_FILE                   - F5 XC API certificate (.p12) in base64 (secret)
+#   AZURE_SUBSCRIPTION_ID             - Azure Subscription ID
+#   AZURE_TENANT_ID                   - Azure Tenant ID
+#   AZURE_CLIENT_ID                   - Azure Service Principal App ID
+#   AZURE_CLIENT_SECRET               - Azure Service Principal Password
+#   SSH_PRIVATE_KEY                   - SSH private key (public key derived at runtime via ssh-keygen -y)
+#   XC_TENANT                         - F5 XC tenant name
+#   XC_API_URL                        - F5 XC API URL (https://<tenant>.console.ves.volterra.io/api)
+#   XC_P12_PASSWORD                   - Password for the F5 XC .p12 certificate
+#   XC_API_P12_FILE                   - F5 XC API certificate (.p12) encoded in base64
 #
 # Required GitHub Variables (Settings -> Secrets and variables -> Variables):
 #   TF_CLOUD_WORKSPACE_AZURE_INFRA    - TFC workspace name for Azure Infra
@@ -23,8 +55,8 @@ name: "F5XC WAF on CE Deploy"
 #   TF_CLOUD_WORKSPACE_XC_DEPLOY      - TFC workspace name for F5 XC
 #   AZURE_REGION                      - Azure region (e.g. eastus)
 #   PROJECT_PREFIX                    - Prefix for all resource names
-#   XC_NAMESPACE                      - F5 XC namespace
-#   APP_DOMAIN                        - App FQDN
+#   XC_NAMESPACE                      - F5 XC namespace for the HTTP LB and WAF policy
+#   APP_DOMAIN                        - App FQDN for the HTTP Load Balancer
 
 on:
   workflow_dispatch:

@@ -1,6 +1,27 @@
-name: "F5XC WAF on CE Destroy"
-# Destroys resources in reverse order: F5XC WAF → AKS Cluster → Azure Infra.
-# Execution is manual (workflow_dispatch). Same secrets/variables as apply workflow.
+name: "F5XC WAF on AZ CE Destroy"
+# Destroys all resources created by the apply workflow in reverse dependency order:
+#   terraform_xc_lb -> terraform_aks -> terraform_infra
+#
+# Destruction order is critical: the CE Site holds references to the Azure VNet.
+# If the VNet is deleted before F5 XC deregisters the CE, Azure returns an error
+# because the CE NICs are still attached. volterra_cloud_credentials has a
+# destroy provisioner with sleep 90 to let Azure finish cleaning up the CE.
+#
+# Resources destroyed per job:
+#   terraform_xc_lb   (xc/)
+#     - HTTP Load Balancer, WAF policy, Origin Pool
+#     - Azure VNET Site (CE VM in <prefix>-rg-xc-<suffix> removed by F5 XC Platform)
+#     - volterra_cloud_credentials (sleep 90 before deletion)
+#     - XC Namespace deleted via API REST (curl) after terraform destroy
+#       (continue-on-error: true — can be removed manually from XC console if needed)
+#
+#   terraform_aks     (azure/aks-cluster)
+#     - VNet Peering (bidirectional), AKS cluster, Online Boutique
+#     - Azure Internal LB (removed with the AKS cluster)
+#     - MC_<prefix>-rg-<suffix>_<prefix>-aks-<suffix>_<region> deleted by Azure automatically
+#
+#   terraform_infra   (azure/azure-infra)
+#     - VNet, subnet (ce_waap_az_subnet), Resource Group <prefix>-rg-<suffix>
 #
 # Required GitHub Secrets:
 #   TF_API_TOKEN                      - Terraform Cloud API token
@@ -9,11 +30,11 @@ name: "F5XC WAF on CE Destroy"
 #   AZURE_TENANT_ID                   - Azure Tenant ID
 #   AZURE_CLIENT_ID                   - Azure Service Principal App ID
 #   AZURE_CLIENT_SECRET               - Azure Service Principal Password
-#   SSH_PRIVATE_KEY                   - SSH private key (public key is derived at runtime)
+#   SSH_PRIVATE_KEY                   - SSH private key (public key derived at runtime via ssh-keygen -y)
 #   XC_TENANT                         - F5 XC tenant name
-#   XC_API_URL                        - F5 XC API URL
+#   XC_API_URL                        - F5 XC API URL (https://<tenant>.console.ves.volterra.io/api)
 #   XC_P12_PASSWORD                   - Password for the F5 XC .p12 certificate
-#   XC_API_P12_FILE                   - F5 XC API certificate (.p12) in base64
+#   XC_API_P12_FILE                   - F5 XC API certificate (.p12) encoded in base64
 #
 # Required GitHub Variables (Settings -> Secrets and variables -> Variables):
 #   TF_CLOUD_WORKSPACE_AZURE_INFRA    - TFC workspace name for Azure Infra
@@ -40,7 +61,7 @@ jobs:
       TF_VAR_xc_namespace: ${{ vars.XC_NAMESPACE }}
       TF_VAR_app_domain: ${{ vars.APP_DOMAIN }}
       TF_VAR_az_ce_site: "true"
-      F_VAR_azure_xc_machine_type: "Standard_D4s_v4"
+      TF_VAR_azure_xc_machine_type: "Standard_D4s_v4"
       TF_VAR_advertise_sites: "true"
       TF_VAR_ip_address_on_site_pool: "true"
       TF_VAR_http_only: "true"
