@@ -488,6 +488,79 @@ TF_VAR_xc_waf_blocking: "true"
 
 Luego volver a ejecutar el workflow. Con blocking activado, los requests maliciosos recibirán un HTTP 403 con la página de bloqueo de F5 XC.
 
+### 6. Validar que el tráfico no pasa por la nube de F5 XC
+
+Con `advertise_sites = true` el HTTP LB **no tiene VIP en el Regional Edge (RE) global de F5 XC**. La IP pública a la que se conecta el cliente es directamente la del CE en Azure (rango Microsoft), no una IP de Volterra/F5.
+
+#### 6.1 Verificar el ASN de la IP del CE
+
+```bash
+curl -s https://ipinfo.io/<IP_CE>/json
+```
+
+La respuesta debe mostrar `"org": "AS8075 Microsoft Corporation"`. Si el tráfico pasara por un RE de F5 XC, el ASN sería de Volterra (AS9009) o F5.
+
+Ejemplo de salida esperada con la IP del CE (`4.150.186.64`):
+
+```json
+{
+  "ip": "4.150.186.64",
+  "city": "Des Moines",
+  "region": "Iowa",
+  "country": "US",
+  "org": "AS8075 Microsoft Corporation",
+  ...
+}
+```
+
+#### 6.2 Traceroute — el camino va a Azure directamente
+
+```bash
+traceroute -n -m 20 <IP_CE>
+```
+
+A partir de los primeros hops del ISP, el tráfico entra al backbone de Microsoft (`104.44.x.x`, `51.10.x.x`) y llega directamente al CE. No deben aparecer hops en rangos de Volterra/F5 XC.
+
+Ejemplo de traza real desde una red en México (Central US):
+
+```
+ 1  192.168.18.1       # Gateway local
+ 2  10.101.0.1         # ISP (NAT)
+ 3-4 10.10.7.x         # Red de tránsito del ISP
+ 5  45.5.68.102        # ISP upstream (Lumen/LATAM)
+ 6-9 84.16.x.x         # Tránsito internacional
+10  104.44.231.18      # ← Entra al backbone de Microsoft (AS8075)
+11-21 104.44.x.x       # Backbone privado de Azure (Central US)
+    51.10.x.x
+    → 4.150.186.64     # CE en Azure
+```
+
+> Los `* * *` en hops intermedios son normales — Azure filtra ICMP TTL-exceeded en su backbone interno.
+
+#### 6.3 Verificar en la consola de F5 XC
+
+En **Multi-Cloud App Connect → Namespaces → `XC_NAMESPACE` → HTTP Load Balancers → `<nombre-lb>`**:
+
+- El campo **"Advertise"** debe mostrar **`Custom`** apuntando al CE Site — **no** `Public VIP` ni `Internet (RE VIP)`.
+- Si apareciera `Public VIP`, el tráfico estaría pasando por el RE global.
+
+La lógica en el código Terraform que controla esto (`xc/xc_loadbalancer.tf`):
+
+```hcl
+advertise_on_public_default_vip = var.advertise_sites == "true" ? false : true
+```
+
+Como `TF_VAR_advertise_sites = "true"`, el VIP público global queda desactivado.
+
+#### 6.4 Verificar el src_ip en los Security Events
+
+En **Security Events** del namespace de F5 XC, el campo `src_ip` del request debe ser **tu IP pública real** (la del cliente), no una IP de un RE de F5 XC. Si el tráfico pasara por el RE, el `src_ip` sería la IP del RE global.
+
+```bash
+# Obtener tu IP pública real y compararla con src_ip en Security Events
+curl -s https://api.ipify.org
+```
+
 ---
 
 ## Destroy del laboratorio
