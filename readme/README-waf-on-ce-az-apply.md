@@ -324,6 +324,41 @@ flowchart LR
 
 ---
 
+## Resource Groups creados en Azure
+
+El laboratorio genera exactamente **3 resource groups** en Azure:
+
+### `<prefix>-rg-<suffix>` (ej. `accessq-rg-3dbd`)
+
+Creado por Terraform en `azure/azure-infra`. Es el **RG principal compartido** del laboratorio. Contiene:
+
+- La **VNet** (`<prefix>-vnet-<suffix>`) con la subnet donde se conecta la NIC del CE (`ce_waap_az_subnet`).
+- El **AKS cluster** — el módulo `azure/aks-cluster` lee el nombre de este RG vía Remote State de `azure-infra` y despliega el cluster aquí, no en un RG propio.
+- El **Azure Internal Load Balancer** del servicio `frontend` de Online Boutique — Azure lo crea aquí porque el Service de Kubernetes tiene la annotation `azure-load-balancer-internal: "true"` y el RG de referencia es este.
+- El **VNet Peering** bidireccional entre este VNet y el VNet interno del AKS.
+
+### `<prefix>-rg-xc-<suffix>` (ej. `accessq-rg-xc-3dbd`)
+
+Creado automáticamente por **F5 XC Platform** cuando se ejecuta el `volterra_tf_params_action apply`. El nombre lo define el campo `resource_group` del recurso `volterra_azure_vnet_site` en `xc/azure_ce_site.tf`. Contiene exclusivamente los recursos del Customer Edge:
+
+- La **VM** del CE (`Standard_D4s_v4`, 80 GB, hardware `azure-byol-voltmesh`).
+- La **NIC** de la VM conectada a la subnet `ce_waap_az_subnet` del VNet del RG principal.
+- Los recursos de red asociados al CE (IP pública de entrada, NSG del CE).
+
+> Terraform no crea este RG directamente — le pasa el nombre a F5 XC y la plataforma lo provisiona en Azure usando las credenciales del Service Principal configurado en `volterra_cloud_credentials`.
+
+### `MC_<prefix>-rg-<suffix>_<prefix>-aks-<suffix>_<region>` (ej. `MC_accessq-rg-3dbd_accessq-aks-3dbd_centralus`)
+
+Creado **automáticamente por Azure** al aprovisionar el AKS cluster. Es el *Managed Resource Group* del plano de datos de AKS — Azure lo gestiona completamente y no puede eliminarse directamente. Contiene:
+
+- Los **nodos (VMs)** del cluster (`Standard_D4s_v3`).
+- La **VNet propia del AKS** — se crea porque `use_new_vnet = true`, lo que significa que el nodo AKS no usa la subnet de `accessq-rg-3dbd` sino su propia VNet privada.
+- Las **NICs, discos y NSGs** de los nodos.
+
+El módulo `azure/aks-cluster` referencia este RG directamente en el peering `peer_b2a` para configurar el VNet Peering desde el lado del AKS hacia el VNet de `azure-infra`, permitiendo que el CE alcance la IP privada del Internal LB.
+
+---
+
 ## Troubleshooting rápido
 
 - **Error `hostname not in correct format` en `setup_tfc_workspaces`:**
