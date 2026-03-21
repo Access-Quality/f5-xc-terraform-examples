@@ -141,6 +141,26 @@ xc/                ──►  XC Namespace (creado vía API curl)
                          1 WAF Policy (volterra_app_firewall, modo monitoring)
 ```
 
+### Comunicación interna de Online Boutique
+
+La aplicación **no expone APIs REST públicas**. Solo el servicio `frontend` es accesible desde el exterior (vía el CE). Los demás 10 microservicios se comunican entre sí exclusivamente mediante **gRPC** dentro del cluster y tienen `type: ClusterIP` (no accesibles desde fuera de AKS).
+
+| Servicio                | Protocolo | Tipo Service   | Accesible externamente |
+| ----------------------- | --------- | -------------- | ---------------------- |
+| `frontend`              | HTTP :8080 | `LoadBalancer` (Internal Azure LB) | **Sí** — via CE (puerto 80) |
+| `checkoutservice`       | gRPC :5050 | `ClusterIP`    | No |
+| `recommendationservice` | gRPC       | `ClusterIP`    | No |
+| `productcatalogservice` | gRPC       | `ClusterIP`    | No |
+| `cartservice`           | gRPC       | `ClusterIP`    | No |
+| `paymentservice`        | gRPC       | `ClusterIP`    | No |
+| `emailservice`          | gRPC :5000 | `ClusterIP`    | No |
+| `shippingservice`       | gRPC       | `ClusterIP`    | No |
+| `currencyservice`       | gRPC       | `ClusterIP`    | No |
+| `adservice`             | gRPC       | `ClusterIP`    | No |
+| `redis-cart`            | TCP :6379  | `ClusterIP`    | No |
+
+Por esta razón el workflow configura `http_only = true` y no activa las funciones de API Protection (`xc_api_disc`, `xc_api_pro`) de F5 XC — la app no expone endpoints REST públicos. El WAF opera únicamente sobre el tráfico HTTP de la UI del `frontend`.
+
 ---
 
 ## Objetivo del workflow
