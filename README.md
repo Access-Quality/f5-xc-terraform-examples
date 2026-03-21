@@ -48,6 +48,14 @@ Despliega un **Web Application Firewall (WAF) sobre el Regional Edge (RE) de F5 
 
 ---
 
+### 6. WAF on CE AWS — `waf-on-ce-aws-apply.yml`
+
+Despliega un **Web Application Firewall (WAF) sobre un Customer Edge (CE) de F5 XC en AWS**, protegiendo la aplicación **Online Boutique** que corre en un clúster EKS privado. El tráfico de internet es inspeccionado por F5 XC directamente en el CE (sin pasar por el Regional Edge), con un HTTP Load Balancer configurado como punto de entrada. Toda la infraestructura se provisiona desde cero con Terraform a través de cuatro workspaces de Terraform Cloud con estado remoto compartido: AWS Infra, EKS Cluster, Boutique App y F5 XC.
+
+👉 [Ver guía completa](readme/README-waf-on-ce-aws-apply.md)
+
+---
+
 ### Archivos de Flujo de Trabajo
 
 | **Workflow**                               | **Guía**                                                              |
@@ -57,5 +65,6 @@ Despliega un **Web Application Firewall (WAF) sobre el Regional Edge (RE) de F5 
 | `waf-on-ce-az-apply.yml`                   | [README](readme/README-waf-on-ce-az-apply.md)                         |
 | `waf-re-aws-apply.yml`                     | [README](readme/README-waf-re-aws-apply.md)                           |
 | `waf-re-ac-aws-vm-apply.yml`               | [README](readme/README-waf-re-ac-aws-vm-apply.md)                     |
+| `waf-on-ce-aws-apply.yml`                  | [README](readme/README-waf-on-ce-aws-apply.md)                        |
 
 ---
