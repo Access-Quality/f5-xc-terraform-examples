@@ -404,6 +404,92 @@ El módulo `azure/aks-cluster` referencia este RG directamente en el peering `pe
 
 ---
 
+## Cómo probar la aplicación
+
+### 1. Verificar el CE Site en F5 XC
+
+En la consola de F5 XC (`https://<tenant>.console.ves.volterra.io`):
+
+1. Ir a **Infrastructure → Sites**.
+2. Buscar el site con el nombre `<PROJECT_PREFIX>` — debe estar en estado **`ONLINE`**.
+3. Ir a **Multi-Cloud App Connect → Manage → Load Balancers → HTTP Load Balancers** dentro del namespace `XC_NAMESPACE`.
+4. Confirmar que el LB existe y que el origin pool muestra el servidor en estado **`HEALTHY`**.
+
+> Si el CE Site aparece en `PROVISIONING` o `UPDATING`, esperar unos minutos. El aprovisionamiento del CE en Azure puede tardar entre 10 y 15 minutos.
+
+### 2. Resolver el dominio (si no hay delegación DNS)
+
+El HTTP LB de F5 XC está configurado con el dominio `APP_DOMAIN` pero **no usa delegación DNS** (`xc_delegation = false`). Para poder acceder desde el navegador o curl es necesario resolver el dominio manualmente.
+
+**Obtener la IP pública del CE:**
+
+En Azure → Resource Group `<prefix>-rg-xc-<suffix>` → buscar la IP pública asociada a la NIC del CE.
+
+O desde la consola de F5 XC → **Infrastructure → Sites → <site-name> → Site Info** → campo **Public IP**.
+
+**Agregar entrada en `/etc/hosts`:**
+
+```bash
+sudo nano /etc/hosts
+```
+
+Añadir al final:
+
+```
+<IP_PUBLICA_CE>   <APP_DOMAIN>
+```
+
+Por ejemplo:
+
+```
+20.10.5.123   boutique.example.com
+```
+
+### 3. Acceder a la aplicación
+
+```bash
+curl -v http://<APP_DOMAIN>/
+```
+
+La respuesta debe ser HTTP 200 con el HTML de Online Boutique (Google microservices-demo). También se puede abrir en el navegador:
+
+```
+http://<APP_DOMAIN>/
+```
+
+### 4. Verificar la WAF (modo monitoring)
+
+Enviar un request con payload malicioso. En modo monitoring el request **pasa**, pero queda registrado como Security Event en F5 XC:
+
+```bash
+# XSS en query string
+curl -v "http://<APP_DOMAIN>/?x=<script>alert(1)</script>"
+
+# SQL injection básica
+curl -v "http://<APP_DOMAIN>/?id=1'+OR+'1'='1"
+
+# Path traversal
+curl -v "http://<APP_DOMAIN>/../../etc/passwd"
+```
+
+**Verificar los eventos en F5 XC:**
+
+1. Ir a **Multi-Cloud App Connect → Namespaces → `XC_NAMESPACE`**.
+2. Ir a **Security → Security Events**.
+3. Los requests anteriores deben aparecer con la firma WAF detectada (tipo `ATTACK_TYPE_XSS`, `ATTACK_TYPE_SQL_INJECTION`, etc.) aunque con acción `ALLOW` (monitoring mode).
+
+### 5. Cambiar WAF a modo blocking (opcional)
+
+Para bloquear ataques en lugar de solo registrarlos, añadir la variable de entorno en el job `terraform_xc_lb` del apply workflow:
+
+```yaml
+TF_VAR_xc_waf_blocking: "true"
+```
+
+Luego volver a ejecutar el workflow. Con blocking activado, los requests maliciosos recibirán un HTTP 403 con la página de bloqueo de F5 XC.
+
+---
+
 ## Destroy del laboratorio
 
 ### Workflow de destroy
