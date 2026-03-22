@@ -60,6 +60,8 @@ Despliega un **Web Application Firewall (WAF) sobre un Customer Edge (CE) de F5 
 
 Despliega una solución de **seguridad de APIs sobre el Regional Edge (RE) de F5 Distributed Cloud**, protegiendo la aplicación **crAPI** (Completely Ridiculous API) que corre en un clúster EKS en AWS. Se instala un **Customer Edge (CE) de F5 XC dentro del clúster EKS** para establecer conectividad segura entre la infraestructura privada y el plano global de XC. F5 XC aplica inspección de tráfico API con WAF, descubrimiento automático de endpoints (**API Discovery**), detección de anomalías y políticas de seguridad basadas en esquema OpenAPI. Toda la infraestructura se provisiona con Terraform a través de cinco workspaces de Terraform Cloud con estado remoto compartido: AWS Infra, EKS Cluster, crAPI App, F5 XC CE y F5 XC API Security.
 
+👉 [Ver guía completa](readme/README-f5xc-api-ce-eks-apply.md)
+
 ---
 
 ### Archivos de Flujo de Trabajo
@@ -72,6 +74,6 @@ Despliega una solución de **seguridad de APIs sobre el Regional Edge (RE) de F5
 | `waf-re-aws-apply.yml`                     | [README](readme/README-waf-re-aws-apply.md)                           |
 | `waf-re-ac-aws-vm-apply.yml`               | [README](readme/README-waf-re-ac-aws-vm-apply.md)                     |
 | `waf-on-ce-aws-apply.yml`                  | [README](readme/README-waf-on-ce-aws-apply.md)                        |
-| `f5xc-api-ce-eks-apply.yml`                | —                                                                     |
+| `f5xc-api-ce-eks-apply.yml`                | [README](readme/README-f5xc-api-ce-eks-apply.md)                      |
 
 ---
