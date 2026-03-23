@@ -317,7 +317,7 @@ jobs:
           aws eks update-kubeconfig --region "${{ vars.AWS_REGION }}" --name "$CLUSTER_NAME"
 
           echo "Deleting LoadBalancer services in namespace crapi..."
-          kubectl delete svc crapi-web mailhog-ingress -n crapi --ignore-not-found=true
+          kubectl delete svc crapi-web mailhog-web-ingress -n crapi --ignore-not-found=true
 
           echo "Deleting LoadBalancer service lb-ver in namespace ves-system..."
           kubectl delete svc lb-ver -n ves-system --ignore-not-found=true
