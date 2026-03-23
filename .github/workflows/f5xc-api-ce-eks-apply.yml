@@ -471,3 +471,52 @@ jobs:
 
       - name: Terraform Apply
         run: terraform apply -auto-approve -input=false
+
+  # -------------------------------------------------------
+  # Job 6: Show deployment endpoints
+  # -------------------------------------------------------
+  show_endpoints:
+    name: "Show Deployment Endpoints"
+    runs-on: ubuntu-latest
+    needs: terraform_xc
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_KEY }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+    steps:
+      - name: Configure kubectl
+        run: |
+          CLUSTER_NAME=$(aws eks list-clusters --region "$AWS_REGION" \
+            --query "clusters[?starts_with(@,'${{ vars.PROJECT_PREFIX }}')]|[0]" \
+            --output text)
+          echo "EKS Cluster: $CLUSTER_NAME"
+          aws eks update-kubeconfig --region "$AWS_REGION" --name "$CLUSTER_NAME"
+
+      - name: Show endpoints
+        run: |
+          ELB1=$(kubectl get svc crapi-web -n crapi \
+            -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "pending")
+          ELB2=$(kubectl get svc mailhog-ingress -n crapi \
+            -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "pending")
+          APP_DOMAIN="${{ vars.APP_DOMAIN }}"
+          APP_IP=$(dig +short "$APP_DOMAIN" | head -1)
+
+          echo ""
+          echo "╔══════════════════════════════════════════════════════════════╗"
+          echo "║              DEPLOYMENT ENDPOINTS SUMMARY                   ║"
+          echo "╠══════════════════════════════════════════════════════════════╣"
+          echo "║ APP_DOMAIN  : $APP_DOMAIN"
+          echo "║ APP_DOMAIN IP (DNS): $APP_IP"
+          echo "╠══════════════════════════════════════════════════════════════╣"
+          echo "║ ELB #1 — crapi-web (acceso directo :80/:443)"
+          echo "║   $ELB1"
+          echo "╠══════════════════════════════════════════════════════════════╣"
+          echo "║ ELB #2 — mailhog-ingress (portal Mailhog :8025)"
+          echo "║   $ELB2"
+          echo "╠══════════════════════════════════════════════════════════════╣"
+          echo "║ URLs de acceso:"
+          echo "║   crAPI (via F5 XC RE) : http://$APP_DOMAIN"
+          echo "║   crAPI (directo)      : http://$ELB1"
+          echo "║   Mailhog              : http://$ELB2:8025"
+          echo "╚══════════════════════════════════════════════════════════════╝"
+          echo ""
