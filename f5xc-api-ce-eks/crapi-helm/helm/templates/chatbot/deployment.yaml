@@ -29,6 +29,8 @@ spec:
           ports:
             - containerPort: {{ .Values.chatbot.port }}
           env:
+            - name: PORT
+              value: {{ .Values.chatbot.port | quote }}
             - name: OPENAI_API_KEY
               valueFrom:
                 secretKeyRef:
