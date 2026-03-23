@@ -258,3 +258,23 @@ apiGatewayService:
     app: gateway-service
   serviceSelectorLabels:
     app: gateway-service
+
+chatbot:
+  enabled: false
+  name: crapi-chatbot
+  image: crapi/crapi-chatbot
+  port: 9999
+  replicaCount: 1
+  openaiApiKey: ""
+  service:
+    name: crapi-chatbot
+    labels:
+      app: crapi-chatbot
+  deploymentLabels:
+    app: crapi-chatbot
+  podLabels:
+    app: crapi-chatbot
+  deploymentSelectorMatchLabels:
+    app: crapi-chatbot
+  serviceSelectorLabels:
+    app: crapi-chatbot

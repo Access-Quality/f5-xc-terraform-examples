@@ -11,6 +11,7 @@ name: "Seguridad API en RE para EKS con CE"
 #   XC_P12_PASSWORD         - Password for the .p12 certificate
 #   XC_TENANT               - F5 XC tenant name
 #   XC_CE_TOKEN             - F5 XC CE pre-registration token
+#   OPENAI_API_KEY          - OpenAI API key for the crAPI chatbot (optional)
 #
 # Variables (Settings > Secrets and variables > Actions > Variables):
 #   PROJECT_PREFIX              - Prefix for resource names
@@ -260,6 +261,8 @@ jobs:
       TF_VAR_aws_region: ${{ vars.AWS_REGION }}
       TF_VAR_infra_workspace: ${{ vars.TF_CLOUD_WORKSPACE_INFRA }}
       TF_VAR_eks_workspace: ${{ vars.TF_CLOUD_WORKSPACE_EKS }}
+      TF_VAR_chatbot_enabled: ${{ secrets.OPENAI_API_KEY != '' && 'true' || 'false' }}
+      TF_VAR_chatbot_openai_key: ${{ secrets.OPENAI_API_KEY }}
 
     steps:
       - name: Checkout

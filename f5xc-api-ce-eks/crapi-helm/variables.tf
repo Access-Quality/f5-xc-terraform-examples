@@ -19,3 +19,16 @@ variable "ssh_key" {
   description = "Only present for warning handling with TF cloud variable set"
   default     = ""
 }
+
+variable "chatbot_enabled" {
+  type        = bool
+  description = "Enable crAPI chatbot service (requires OpenAI API key)"
+  default     = false
+}
+
+variable "chatbot_openai_key" {
+  type        = string
+  description = "OpenAI API key for the crAPI chatbot service"
+  default     = ""
+  sensitive   = true
+}

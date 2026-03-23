@@ -11,4 +11,4 @@ data:
   WORKSHOP_SERVICE: {{ .Values.workshop.service.name }}:{{ .Values.workshop.port }}
   MAILHOG_WEB_SERVICE: {{ .Values.mailhog.webService.name }}:{{ .Values.mailhog.webPort }}
   TLS_ENABLED: {{ .Values.tlsEnabled | quote }}
-  CHATBOT_SERVICE: {{ default "localhost:9999" .Values.chatbotService }}
+  CHATBOT_SERVICE: {{ if .Values.chatbot.enabled }}{{ .Values.chatbot.service.name }}:{{ .Values.chatbot.port }}{{ else }}localhost:9999{{ end }}

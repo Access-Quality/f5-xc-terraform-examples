@@ -205,6 +205,12 @@ Configurar en **Settings → Secrets and variables → Secrets**:
 | `XC_API_P12_FILE` | Certificado API de F5 XC en formato `.p12` codificado en **base64**     |
 | `XC_CE_TOKEN`     | Token de pre-registro del CE generado en la consola de F5 XC            |
 
+### Chatbot (opcional)
+
+| Secreto           | Descripción                                                             |
+| ----------------- | ----------------------------------------------------------------------- |
+| `OPENAI_API_KEY`  | API key de OpenAI para el chatbot de crAPI. Si se configura, el chatbot se habilita automáticamente. Si no, el chatbot permanece desactivado. |
+
 ### SSH
 
 | Secreto           | Descripción                                                                                    |
@@ -535,6 +541,18 @@ Una vez que el workflow finaliza correctamente, la aplicación crAPI queda expue
 ### Interfaz web
 
 crAPI también expone una interfaz web en `http://<APP_DOMAIN>`. Acceder en el navegador, registrar una cuenta (o usar la existente) y explorar el dashboard, el garage virtual y la tienda.
+
+### Chatbot de crAPI
+
+crAPI incluye un chatbot integrado en la interfaz web que utiliza la API de OpenAI. Para habilitarlo:
+
+1. **Configurar el secreto** `OPENAI_API_KEY` en **Settings → Secrets and variables → Actions → Secrets** con tu API key de OpenAI (formato `sk-...`).
+
+2. El workflow lo detecta automáticamente y habilita el servicio `crapi-chatbot` durante el deploy de Job 3. Si el secreto no está configurado, el chatbot permanece desactivado (`localhost:9999`).
+
+3. Una vez desplegado, el chatbot aparece en la interfaz web de crAPI. Al iniciar sesión, el icono de chat en la esquina inferior permite abrir la conversación directamente sin necesidad de introducir la API key manualmente.
+
+> **Nota de seguridad:** El secreto `OPENAI_API_KEY` se inyecta a través de un Kubernetes Secret (`crapi-chatbot-secret`) creado por el Helm chart. No queda expuesto en los logs del workflow ni en el estado de Terraform Cloud.
 
 ### Vulnerabilidades OWASP API Security Top 10
 
