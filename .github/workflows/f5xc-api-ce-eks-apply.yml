@@ -390,6 +390,91 @@ jobs:
       - name: Terraform Apply
         run: terraform apply -auto-approve -input=false
 
+      - name: Approve CE Registration in F5 XC
+        env:
+          XC_API_URL: ${{ secrets.XC_API_URL }}
+          XC_API_P12_FILE: ${{ secrets.XC_API_P12_FILE }}
+          XC_P12_PASSWORD: ${{ secrets.XC_P12_PASSWORD }}
+          XC_TENANT: ${{ secrets.XC_TENANT }}
+          CLUSTER_NAME: ${{ vars.PROJECT_PREFIX }}
+        run: |
+          # Extract cert and key from P12
+          echo "${XC_API_P12_FILE}" | base64 -d > /tmp/api.p12
+          openssl pkcs12 -legacy -in /tmp/api.p12 -nokeys -clcerts -passin pass:"${XC_P12_PASSWORD}" 2>/dev/null \
+            | openssl x509 > /tmp/client.crt
+          openssl pkcs12 -legacy -in /tmp/api.p12 -nocerts -nodes -passin pass:"${XC_P12_PASSWORD}" 2>/dev/null \
+            | openssl pkey > /tmp/client.key
+          rm -f /tmp/api.p12
+
+          # Strip trailing /api from URL if present
+          BASE_URL="${XC_API_URL%/api}"
+          REG_URL="${BASE_URL}/api/register/namespaces/system/registrations"
+
+          echo "Polling F5 XC for PENDING registration of cluster '${CLUSTER_NAME}'..."
+          REG_NAME=""
+          SECONDS_WAITED=0
+          MAX_WAIT=480  # 8 minutes max
+
+          while [[ -z "${REG_NAME}" && ${SECONDS_WAITED} -lt ${MAX_WAIT} ]]; do
+            sleep 15
+            SECONDS_WAITED=$((SECONDS_WAITED + 15))
+
+            RESPONSE=$(curl -sf --cert /tmp/client.crt --key /tmp/client.key \
+              -H "x-volterra-apigw-tenant: ${XC_TENANT}" \
+              -H "accept: application/json" \
+              "${REG_URL}" 2>/dev/null || true)
+
+            if [[ -n "${RESPONSE}" ]]; then
+              REG_NAME=$(echo "${RESPONSE}" | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          items = data.get('items', [])
+          cluster = '${CLUSTER_NAME}'
+          for item in items:
+              spec = item.get('spec', {})
+              infra = spec.get('infra', {})
+              if infra.get('cluster_name','') == cluster and spec.get('state','') == 'PENDING':
+                  print(item['name'])
+                  break
+          " 2>/dev/null || true)
+            fi
+
+            echo "  [${SECONDS_WAITED}s] PENDING registration found: ${REG_NAME:-none yet}"
+          done
+
+          rm -f /tmp/client.crt /tmp/client.key
+
+          if [[ -z "${REG_NAME}" ]]; then
+            echo "ERROR: No PENDING registration found for '${CLUSTER_NAME}' after ${MAX_WAIT}s"
+            exit 1
+          fi
+
+          echo "Approving registration '${REG_NAME}'..."
+          echo "${XC_API_P12_FILE}" | base64 -d > /tmp/api.p12
+          openssl pkcs12 -legacy -in /tmp/api.p12 -nokeys -clcerts -passin pass:"${XC_P12_PASSWORD}" 2>/dev/null \
+            | openssl x509 > /tmp/client.crt
+          openssl pkcs12 -legacy -in /tmp/api.p12 -nocerts -nodes -passin pass:"${XC_P12_PASSWORD}" 2>/dev/null \
+            | openssl pkey > /tmp/client.key
+          rm -f /tmp/api.p12
+
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            --cert /tmp/client.crt --key /tmp/client.key \
+            -X POST \
+            -H "x-volterra-apigw-tenant: ${XC_TENANT}" \
+            -H "Content-Type: application/json" \
+            -H "accept: application/json" \
+            -d "{\"name\":\"${REG_NAME}\",\"namespace\":\"system\",\"passport\":{\"cluster_size\":1}}" \
+            "${BASE_URL}/api/register/namespaces/system/registrations/${REG_NAME}/approve")
+
+          rm -f /tmp/client.crt /tmp/client.key
+
+          if [[ "${HTTP_CODE}" == "200" ]]; then
+            echo "Registration '${REG_NAME}' approved successfully (HTTP 200)."
+          else
+            echo "ERROR: Approval returned HTTP ${HTTP_CODE}"
+            exit 1
+          fi
+
   # -------------------------------------------------------
   # Job 5: F5 XC API Security Configuration
   # -------------------------------------------------------
@@ -446,10 +531,10 @@ jobs:
           EOF
           echo "${{ secrets.XC_API_P12_FILE }}" | base64 -d > api.p12
 
-      - name: Wait for CE to register with F5 XC
+      - name: Wait for CE to reach ADMITTED state in F5 XC
         run: |
-          echo "Waiting 12 minutes for CE pod to boot and register with F5 XC..."
-          sleep 720
+          echo "Registration already approved by previous job — waiting 60s for ADMITTED propagation..."
+          sleep 60
 
       - name: Terraform Init
         id: init
