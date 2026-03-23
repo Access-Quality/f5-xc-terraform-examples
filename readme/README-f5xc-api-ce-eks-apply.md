@@ -46,14 +46,20 @@ Internet
 │  │  │  Namespace: ves-system (F5 XC CE)                        │  │  │
 │  │  │  Hardware: k8s-minikube-voltmesh                         │  │  │
 │  │  │  ConfigMap: vpm-cfg (ClusterName, Token, Lat/Lon)        │  │  │
+│  │  │  Service: lb-ver (LoadBalancer :80) ──► AWS ELB #3       │  │  │
 │  │  └──────────────────────────────────────────────────────────┘  │  │
 │  │                                                                │  │
 │  │  ┌──────────────────────────────────────────────────────────┐  │  │
 │  │  │  Namespace: crapi                                        │  │  │
 │  │  │  crAPI (Helm) — Completely Ridiculous API                │  │  │
-│  │  │  Service: crapi-web (LoadBalancer, puerto 80)          │  │  │
+│  │  │  Service: crapi-web (LoadBalancer :80/443) ──► AWS ELB #1│  │  │
+│  │  │  Service: mailhog-ingress (LoadBalancer :8025) ► AWS ELB #2│  │  │
 │  │  └──────────────────────────────────────────────────────────┘  │  │
 │  └────────────────────────────────────────────────────────────────┘  │
+│                                                                      │
+│  AWS ELB #1 ── crapi-web ──── puerto 80/443 (acceso directo crAPI)   │
+│  AWS ELB #2 ── mailhog ────── puerto 8025  (portal Mailhog)          │
+│  AWS ELB #3 ── lb-ver ──────── puerto 80   (entrada CE desde XC RE)  │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -124,12 +130,14 @@ f5xc-api-ce-eks/eks-cluster  ──►  1 EKS Cluster (nodos t3.xlarge, endpoint
         │  (Remote State: cluster name, endpoint, kubeconfig)
         ▼
 f5xc-api-ce-eks/crapi-helm  ──►  crAPI (Helm chart) en namespace "crapi"
-        │                         Service: crapi-web (LoadBalancer, puerto 80)
+        │                         AWS ELB #1: crapi-web       (LoadBalancer :80/:443)
+        │                         AWS ELB #2: mailhog-ingress (LoadBalancer :8025)
         │
         ▼
 f5xc-api-ce-eks/eks-cluster/ce-deployment  ──►  CE como Kubernetes workload (namespace ves-system)
         │                                         ConfigMap: vpm-cfg (k8s-minikube-voltmesh)
-        │                                         Espera 12 minutos para registro en F5 XC
+        │                                         AWS ELB #3: lb-ver (LoadBalancer :80) — entrada CE
+        │                                         sleep 180 + terraform apply -target (registro automático)
         │
         ▼
 f5xc-api-ce-eks/xc  ──►  volterra_origin_pool (k8s_service: crapi-web.crapi:80)
@@ -344,22 +352,49 @@ flowchart LR
   end
 
   subgraph AWS_VPC[AWS VPC]
+    ELB1["AWS ELB #1\ncrapi-web\n:80 / :443\n(acceso directo crAPI)"]
+    ELB2["AWS ELB #2\nmailhog-ingress\n:8025\n(portal Mailhog)"]
+    ELB3["AWS ELB #3\nlb-ver\n:80\n(entrada CE desde XC RE)"]
+
     subgraph EKS["EKS Cluster — nodos t3.xlarge"]
       subgraph NS_VES[ves-system]
         CE["F5 XC CE\nk8s-minikube-voltmesh\nConfigMap: vpm-cfg\nToken: XC_CE_TOKEN"]
+        LB_VER["Service: lb-ver\nLoadBalancer :80"]
       end
       subgraph NS_CRAPI[crapi]
-        CRAPI_SVC["Service: crapi-web\nLoadBalancer — puerto 80"]
+        CRAPI_SVC["Service: crapi-web\nLoadBalancer :80/:443"]
+        MAILHOG_SVC["Service: mailhog-ingress\nLoadBalancer :8025"]
         CRAPI_APP["crAPI\n(Helm chart)"]
+        MAILHOG_APP["Mailhog"]
         CRAPI_SVC --> CRAPI_APP
+        MAILHOG_SVC --> MAILHOG_APP
       end
     end
+
+    ELB1 --> CRAPI_SVC
+    ELB2 --> MAILHOG_SVC
+    ELB3 --> LB_VER
+    LB_VER --> CE
   end
 
-  INET -->|"HTTP :80"| XC_LB
-  XC_OP -->|"túnel vk8s_networks\noutside_network"| CE
-  CE -->|"k8s svc"| CRAPI_SVC
+  INET -->|"HTTP :80\n(vía F5 XC)"| XC_LB
+  INET -->|"HTTP :80/:443\n(acceso directo)"| ELB1
+  INET -->|"HTTP :8025\n(Mailhog)"| ELB2
+  XC_OP -->|"túnel vk8s_networks\noutside_network"| ELB3
+  CE -->|"k8s svc ClusterIP"| CRAPI_APP
 ```
+
+### AWS Load Balancers creados automáticamente
+
+EKS provisiona un AWS Classic Load Balancer por cada servicio Kubernetes de tipo `LoadBalancer`. Este workflow crea **3 ELBs** en total:
+
+| # | Nombre en K8s | Namespace | Puertos | Origen | Uso |
+|---|---------------|-----------|---------|--------|----- |
+| 1 | `crapi-web` | `crapi` | 80, 443 | `web/ingress.yaml` (Helm chart) | Acceso directo a crAPI, sin pasar por F5 XC |
+| 2 | `mailhog-ingress` | `crapi` | 8025 | `mailhog/ingress.yaml` (Helm chart) | Portal web de Mailhog para captura de emails |
+| 3 | `lb-ver` | `ves-system` | 80 | `ce-k8s-lb.tf` (Terraform CE) | Punto de entrada del CE para el tráfico desde el Regional Edge de F5 XC |
+
+> **Nota:** El tráfico de producción que pasa por F5 XC llega a crAPI a través del ELB #3 (`lb-ver` → CE → ClusterIP `crapi-web`), **no** a través del ELB #1. El ELB #1 es un acceso directo alternativo sin WAF ni inspección de F5 XC.
 
 ---
 
