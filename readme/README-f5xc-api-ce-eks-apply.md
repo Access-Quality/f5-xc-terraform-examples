@@ -51,7 +51,7 @@ Internet
 │  │  ┌──────────────────────────────────────────────────────────┐  │  │
 │  │  │  Namespace: crapi                                        │  │  │
 │  │  │  crAPI (Helm) — Completely Ridiculous API                │  │  │
-│  │  │  Service: crapi-web (ClusterIP, puerto 80)               │  │  │
+│  │  │  Service: crapi-web (LoadBalancer, puerto 80)          │  │  │
 │  │  └──────────────────────────────────────────────────────────┘  │  │
 │  └────────────────────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────────────────────┘
@@ -68,7 +68,7 @@ Internet
 | Registro              | Token pre-generado (`XC_CE_TOKEN`) + ConfigMap `vpm-cfg`                                        |
 | Geolocalización       | `CE_LATITUDE` / `CE_LONGITUDE` configurados como variables del repositorio                       |
 | Endpoint Maurice      | `https://register.ves.volterra.io` / `https://register-tls.ves.volterra.io`                     |
-| Tiempo de espera      | **12 minutos** (`sleep 720`) tras el apply de CE para que los pods arranquen y se registren en XC |
+| Tiempo de espera      | **3 minutos** (`sleep 180`) en Job 5 antes del `terraform apply -target` que aprueba el registro automáticamente |
 | Módulo Terraform      | `f5xc-api-ce-eks/eks-cluster/ce-deployment`                                                      |
 
 #### HTTP Load Balancer (F5 XC)
@@ -124,7 +124,7 @@ f5xc-api-ce-eks/eks-cluster  ──►  1 EKS Cluster (nodos t3.xlarge, endpoint
         │  (Remote State: cluster name, endpoint, kubeconfig)
         ▼
 f5xc-api-ce-eks/crapi-helm  ──►  crAPI (Helm chart) en namespace "crapi"
-        │                         Service: crapi-web (ClusterIP, puerto 80)
+        │                         Service: crapi-web (LoadBalancer, puerto 80)
         │
         ▼
 f5xc-api-ce-eks/eks-cluster/ce-deployment  ──►  CE como Kubernetes workload (namespace ves-system)
@@ -306,7 +306,10 @@ Crea o actualiza los cinco workspaces en Terraform Cloud vía la API REST:
   - 1 Origin Pool (`volterra_origin_pool`) tipo `k8s_service` → `crapi-web.crapi` en puerto `80`, con `vk8s_networks = true` y `outside_network = true`, apuntando al CE Site registrado en EKS.
   - 1 HTTP Load Balancer (`volterra_http_loadbalancer`) en puerto 80 publicado en el **Regional Edge global** de F5 XC (no `advertise_custom`).
   - 1 WAF Policy (`volterra_app_firewall`) vinculada al HTTP LB.
-- **Step especial:** espera **12 minutos** (`sleep 720`) antes de ejecutar Terraform para dar tiempo a que los pods del CE arranquen y completen el registro con F5 XC.
+- **Flujo de steps especiales:**
+  1. `sleep 180` — espera 3 minutos para que `vp-manager` arranque y envíe el registro a F5 XC.
+  2. `terraform apply -auto-approve -target=volterra_site_state.site[0] -target=volterra_registration_approval.k8s-ce[0]` — aprueba el CE automáticamente antes de que `vp-manager` agote sus reintentos.
+  3. `terraform plan` + `terraform apply -auto-approve` completo — crea el Load Balancer, WAF y Origin Pool una vez el CE está ONLINE.
 - **Parámetros fijos en el job:**
 
   | Variable Terraform      | Valor              | Propósito                                                          |
@@ -346,7 +349,7 @@ flowchart LR
         CE["F5 XC CE\nk8s-minikube-voltmesh\nConfigMap: vpm-cfg\nToken: XC_CE_TOKEN"]
       end
       subgraph NS_CRAPI[crapi]
-        CRAPI_SVC["Service: crapi-web\nClusterIP — puerto 80"]
+        CRAPI_SVC["Service: crapi-web\nLoadBalancer — puerto 80"]
         CRAPI_APP["crAPI\n(Helm chart)"]
         CRAPI_SVC --> CRAPI_APP
       end
@@ -362,8 +365,8 @@ flowchart LR
 
 ## Troubleshooting rápido
 
-- **El CE Site queda en `REGISTERING` indefinidamente:**
-  Verificar que el secreto `XC_CE_TOKEN` sea un token de pre-registro válido y no haya expirado. Generar uno nuevo desde la consola de F5 XC en *Multi-Cloud Network Connect → Manage → Site Management → Site Tokens*.
+- **El CE Site queda en `PENDING` / `REGISTERING` indefinidamente:**
+  El workflow aprueba el registro automáticamente con `terraform apply -target=volterra_registration_approval.k8s-ce[0]` tras un `sleep 180`. Si persiste, verificar que el secreto `XC_CE_TOKEN` sea un token de pre-registro válido y no haya expirado. Generar uno nuevo desde la consola de F5 XC en *Multi-Cloud Network Connect → Manage → Site Management → Site Tokens*.
 
 - **Error al decodificar `XC_API_P12_FILE`:**
   Confirmar que el archivo esté correctamente codificado en base64:
@@ -373,7 +376,7 @@ flowchart LR
   ```
 
 - **El job `terraform_xc` falla con `site not found`:**
-  El CE necesita estar completamente registrado antes de que Terraform configure el LB. Si falla después del `sleep 720`, ejecutar solo el job de XC nuevamente una vez que el CE aparezca como `ONLINE` en la consola de F5 XC.
+  El CE necesita estar completamente registrado y ONLINE antes de que Terraform configure el LB. El workflow ya espera 3 minutos y aprueba el registro con `-target`. Si falla igualmente, ejecutar solo el job `terraform_xc` nuevamente una vez que el CE aparezca como `ONLINE` en la consola de F5 XC.
 
 - **`crapi-web` no responde en puerto 80:**
   Verificar que el Helm release se haya aplicado correctamente:
