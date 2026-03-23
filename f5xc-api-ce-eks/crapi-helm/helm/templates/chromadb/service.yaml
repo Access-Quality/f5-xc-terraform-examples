@@ -1,0 +1,17 @@
+{{- if .Values.chatbot.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.chromadb.service.name }}
+  namespace: {{ .Values.mailhog.namespace }}
+  labels:
+    app: {{ .Values.chromadb.name }}
+    release: {{ .Release.Name }}
+spec:
+  ports:
+    - port: {{ .Values.chromadb.port }}
+      targetPort: {{ .Values.chromadb.port }}
+      name: http
+  selector:
+    app: {{ .Values.chromadb.name }}
+{{- end }}

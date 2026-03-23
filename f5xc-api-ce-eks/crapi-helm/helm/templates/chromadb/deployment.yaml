@@ -1,0 +1,29 @@
+{{- if .Values.chatbot.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.chromadb.name }}
+  namespace: {{ .Values.mailhog.namespace }}
+  labels:
+    app: {{ .Values.chromadb.name }}
+    release: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.chromadb.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Values.chromadb.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.chromadb.name }}
+    spec:
+      containers:
+        - name: {{ .Values.chromadb.name }}
+          image: {{ .Values.chromadb.image }}:{{ .Values.chromadb.tag }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: {{ .Values.chromadb.port }}
+          env:
+            - name: IS_PERSISTENT
+              value: "FALSE"
+{{- end }}

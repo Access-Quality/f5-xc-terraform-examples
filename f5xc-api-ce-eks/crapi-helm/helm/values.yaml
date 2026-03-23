@@ -266,6 +266,15 @@ chatbot:
   port: 9999
   replicaCount: 1
   openaiApiKey: ""
+
+chromadb:
+  name: chromadb
+  image: chromadb/chroma
+  tag: latest
+  port: 8000
+  replicaCount: 1
+  service:
+    name: chromadb
   service:
     name: crapi-chatbot
     labels:

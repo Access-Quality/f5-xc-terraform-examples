@@ -31,9 +31,13 @@ spec:
           env:
             - name: SERVER_PORT
               value: {{ .Values.chatbot.port | quote }}
-            - name: OPENAI_API_KEY
+            - name: CHATBOT_OPENAI_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: crapi-chatbot-secret
                   key: openai-api-key
+            - name: CHROMA_HOST
+              value: chromadb
+            - name: CHROMA_PORT
+              value: "8000"
 {{- end }}
