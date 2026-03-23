@@ -500,7 +500,7 @@ jobs:
           ELB2=$(kubectl get svc mailhog-web-ingress -n crapi \
             -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "pending")
           APP_DOMAIN="${{ vars.APP_DOMAIN }}"
-          APP_IP=$(nslookup "$APP_DOMAIN" 2>/dev/null | awk '/^Address: / { print $2; exit }')
+          APP_IP=$(host "$APP_DOMAIN" 2>/dev/null | awk '/has address/ { print $4; exit }')
 
           echo ""
           echo "╔══════════════════════════════════════════════════════════════╗"
