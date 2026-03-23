@@ -335,6 +335,36 @@ Crea o actualiza los cinco workspaces en Terraform Cloud vía la API REST:
   echo "${{ secrets.XC_API_P12_FILE }}" | base64 -d > api.p12
   ```
 
+### `show_endpoints` — Resumen de endpoints
+
+- **Sin workspace TFC** — solo usa AWS CLI y `kubectl`, no ejecuta Terraform.
+- **Qué hace:**
+  - Descubre el nombre del clúster EKS buscando por prefijo (`PROJECT_PREFIX`) con `aws eks list-clusters`.
+  - Actualiza el kubeconfig con `aws eks update-kubeconfig`.
+  - Consulta el `EXTERNAL-IP` de los servicios `crapi-web` y `mailhog-ingress` en el namespace `crapi`.
+  - Resuelve el `APP_DOMAIN` a IP con `dig +short` para confirmar que el DNS apunta al Regional Edge de F5 XC.
+  - Imprime un resumen formateado con todos los endpoints de acceso.
+- **Output de ejemplo:**
+  ```
+  ╔══════════════════════════════════════════════════════════════╗
+  ║              DEPLOYMENT ENDPOINTS SUMMARY                   ║
+  ╠══════════════════════════════════════════════════════════════╣
+  ║ APP_DOMAIN  : casos.accessq.com
+  ║ APP_DOMAIN IP (DNS): 5.182.x.x
+  ╠══════════════════════════════════════════════════════════════╣
+  ║ ELB #1 — crapi-web (acceso directo :80/:443)
+  ║   abc123.us-east-1.elb.amazonaws.com
+  ╠══════════════════════════════════════════════════════════════╣
+  ║ ELB #2 — mailhog-ingress (portal Mailhog :8025)
+  ║   def456.us-east-1.elb.amazonaws.com
+  ╠══════════════════════════════════════════════════════════════╣
+  ║ URLs de acceso:
+  ║   crAPI (via F5 XC RE) : http://casos.accessq.com
+  ║   crAPI (directo)      : http://abc123.us-east-1.elb.amazonaws.com
+  ║   Mailhog              : http://def456.us-east-1.elb.amazonaws.com:8025
+  ╚══════════════════════════════════════════════════════════════╝
+  ```
+
 ---
 
 ## Arquitectura desplegada por el workflow
@@ -519,4 +549,7 @@ crAPI está diseñada deliberadamente con vulnerabilidades para fines de laborat
 2. Seleccionar el workflow: **Seguridad API en RE para EKS con CE**.
 3. Hacer clic en **Run workflow**.
 4. Confirmar en la rama `main` (o la rama configurada).
-5. Monitorear el progreso: los jobs se ejecutan en secuencia. El último job (`terraform_xc`) espera 3 minutos y aprueba el registro del CE automáticamente antes de crear el Load Balancer.
+5. Monitorear el progreso: los 6 jobs se ejecutan en secuencia:
+   - Jobs 0–4: infraestructura, EKS, crAPI y CE.
+   - Job 5 (`terraform_xc`): espera 3 minutos, aprueba el registro del CE y crea el Load Balancer en F5 XC.
+   - Job 6 (`show_endpoints`): imprime las URLs de acceso finales (APP_DOMAIN + ELBs de AWS) directamente en el log del workflow.
