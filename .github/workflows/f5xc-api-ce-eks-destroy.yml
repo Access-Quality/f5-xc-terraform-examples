@@ -1,6 +1,9 @@
 name: "Seguridad API en RE para EKS con CE - Destroy"
 
-# Secrets requeridos: mismos que el apply workflow
+# Secrets requeridos (mismos que el apply workflow):
+#   TF_API_TOKEN, TF_CLOUD_ORGANIZATION, AWS_ACCESS_KEY, AWS_SECRET_KEY,
+#   SSH_PRIVATE_KEY, XC_API_P12_FILE, XC_API_URL, XC_P12_PASSWORD,
+#   XC_TENANT, XC_CE_TOKEN, OPENAI_API_KEY (opcional, para chatbot)
 # Variables requeridas: mismas que el apply workflow
 
 on:
@@ -246,6 +249,8 @@ jobs:
       TF_VAR_aws_region: ${{ vars.AWS_REGION }}
       TF_VAR_infra_workspace: ${{ vars.TF_CLOUD_WORKSPACE_INFRA }}
       TF_VAR_eks_workspace: ${{ vars.TF_CLOUD_WORKSPACE_EKS }}
+      TF_VAR_chatbot_enabled: ${{ secrets.OPENAI_API_KEY != '' && 'true' || 'false' }}
+      TF_VAR_chatbot_openai_key: ${{ secrets.OPENAI_API_KEY }}
 
     steps:
       - name: Checkout
