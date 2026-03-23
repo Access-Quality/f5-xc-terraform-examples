@@ -396,10 +396,74 @@ flowchart LR
 
 ---
 
+## Uso de la aplicación crAPI
+
+Una vez que el workflow finaliza correctamente, la aplicación crAPI queda expuesta en la URL configurada en `APP_DOMAIN` (por ejemplo, `http://casos.accessq.com`).
+
+### Registro e inicio de sesión
+
+1. **Crear una cuenta** enviando un POST al endpoint de registro:
+   ```bash
+   curl -s -X POST http://<APP_DOMAIN>/identity/api/auth/signup \
+     -H "Content-Type: application/json" \
+     -d '{"email":"usuario@ejemplo.com","name":"Nombre Apellido","password":"Password123!","number":"1234567890"}'
+   ```
+   La respuesta incluye un mensaje de verificación. crAPI envía un email de confirmación interno.
+
+2. **Verificar la cuenta con Mailhog:**
+   Mailhog captura todos los emails enviados por crAPI. La URL del portal de Mailhog corresponde al External IP del servicio `mailhog` en el namespace `crapi`:
+   ```bash
+   kubectl get svc -n crapi mailhog
+   ```
+   Abrir `http://<EXTERNAL-IP>:8025` en el navegador, buscar el email de verificación y hacer clic en el enlace de confirmación.
+
+3. **Iniciar sesión** para obtener el token JWT:
+   ```bash
+   curl -s -X POST http://<APP_DOMAIN>/identity/api/auth/login \
+     -H "Content-Type: application/json" \
+     -d '{"email":"usuario@ejemplo.com","password":"Password123!"}' | jq .token
+   ```
+   Guardar el token para usarlo en las siguientes peticiones como `Bearer <token>`.
+
+### Funcionalidades principales
+
+| Funcionalidad            | Método | Endpoint                                         |
+| ------------------------ | ------ | ------------------------------------------------ |
+| Registro                 | POST   | `/identity/api/auth/signup`                      |
+| Login                    | POST   | `/identity/api/auth/login`                       |
+| Perfil de usuario        | GET    | `/identity/api/v2/user/dashboard`                |
+| Vehículos del usuario    | GET    | `/identity/api/v2/vehicle/vehicles`              |
+| Localización del vehículo| GET    | `/identity/api/v2/vehicle/{vehicleId}/location`  |
+| Comunidad (posts)        | GET    | `/community/api/v2/community/posts/recent`       |
+| Tienda — productos       | GET    | `/workshop/api/shop/products`                    |
+| Tienda — órdenes         | POST   | `/workshop/api/shop/orders`                      |
+| Cupones                  | POST   | `/workshop/api/shop/apply_coupon`                |
+| Mecánico (contacto)      | POST   | `/workshop/api/mechanic/`                        |
+
+### Interfaz web
+
+crAPI también expone una interfaz web en `http://<APP_DOMAIN>`. Acceder en el navegador, registrar una cuenta (o usar la existente) y explorar el dashboard, el garage virtual y la tienda.
+
+### Vulnerabilidades OWASP API Security Top 10
+
+crAPI está diseñada deliberadamente con vulnerabilidades para fines de laboratorio. Algunos ejemplos verificables:
+
+| ID      | Vulnerabilidad                    | Descripción breve                                                            |
+| ------- | --------------------------------- | ---------------------------------------------------------------------------- |
+| API1    | Broken Object Level Authorization | Acceder a la ubicación del vehículo de otro usuario usando su `vehicleId`    |
+| API2    | Broken Authentication             | Fuerza bruta al endpoint de OTP (`/identity/api/auth/v3/check-otp`)         |
+| API3    | Broken Object Property Auth       | Modificar propiedades no permitidas del perfil de usuario                    |
+| API5    | Broken Function Level Auth        | Acceder a la API de mecánicos como usuario normal                            |
+| API8    | Security Misconfiguration         | Endpoint de video expone objeto completo sin filtrar                          |
+
+> **Nota:** Este laboratorio es un entorno controlado. Las vulnerabilidades existen intencionalmente para demostración y aprendizaje con F5 XC API Security (API Discovery, WAF, rate limiting).
+
+---
+
 ## Ejecución manual
 
 1. Ir a **Actions** en GitHub.
 2. Seleccionar el workflow: **Seguridad API en RE para EKS con CE**.
 3. Hacer clic en **Run workflow**.
 4. Confirmar en la rama `main` (o la rama configurada).
-5. Monitorear el progreso: los jobs se ejecutan en secuencia, el último (`F5XC API Security`) incluye una espera de **12 minutos** antes de ejecutar Terraform.
+5. Monitorear el progreso: los jobs se ejecutan en secuencia. El último job (`terraform_xc`) espera 3 minutos y aprueba el registro del CE automáticamente antes de crear el Load Balancer.
