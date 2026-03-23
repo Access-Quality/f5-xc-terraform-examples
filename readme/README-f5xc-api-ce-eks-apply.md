@@ -84,7 +84,7 @@ Internet
 | Tipo                   | HTTP (no HTTPS, no auto-cert — `http_only = true`)             |
 | Puerto                 | 80                                                             |
 | Modo de advertise      | Regional Edge global de F5 XC (no `advertise_custom`)          |
-| WAF Policy             | `volterra_app_firewall` — modo configurable (`xc_waf_blocking`) |
+| WAF Policy             | `volterra_app_firewall` — enforcement mode explícito: `blocking=true` o `monitoring=true` según `xc_waf_blocking` |
 | Site de origen         | CE desplegado en EKS (`eks_ce_site = true`, `user_site = true`) |
 
 #### Origin Pool
@@ -458,6 +458,15 @@ EKS provisiona un AWS Classic Load Balancer por cada servicio Kubernetes de tipo
 
 - **El Origin Pool no puede alcanzar el servicio `crapi-web.crapi`:**
   Confirmar que `TF_VAR_site_name` coincide exactamente con el nombre del CE Site registrado en F5 XC (`PROJECT_PREFIX`). El site locator usa `namespace = "system"` y `tenant = null` (tenant del usuario, no ves-io).
+
+- **El enforcement mode del WAF aparece sin seleccionar en la consola de F5 XC:**
+  Ocurre si el recurso `volterra_app_firewall` usa `use_loadbalancer_setting = true`, que delega el modo al LB y XC lo muestra en blanco. El fix ya está aplicado: el WAF define explícitamente `blocking = tobool(var.xc_waf_blocking)` y `monitoring = !tobool(var.xc_waf_blocking)`. Con el valor por defecto (`xc_waf_blocking = "false"`) el modo es **Monitoring**. Para activar **Blocking**, pasar `TF_VAR_xc_waf_blocking=true` en el job `terraform_xc`.
+
+- **El workflow de destroy no elimina el VPC (error: dependencias activas):**
+  Los ELBs creados por Kubernetes (`crapi-web`, `mailhog-ingress`, `lb-ver`) no son gestionados por Terraform y quedan activos dentro del VPC bloqueando su eliminación. El workflow de destroy ya incluye un step previo al destroy del cluster EKS que:
+  1. Descubre el cluster por prefijo y actualiza el kubeconfig.
+  2. Ejecuta `kubectl delete svc crapi-web mailhog-ingress -n crapi` y `kubectl delete svc lb-ver -n ves-system`.
+  3. Espera 60 segundos para que AWS elimine los ELBs antes de continuar con `terraform destroy`.
 
 ---
 
