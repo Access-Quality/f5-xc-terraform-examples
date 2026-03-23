@@ -118,6 +118,7 @@ jobs:
       TF_VAR_site_name: ${{ vars.PROJECT_PREFIX }}
       TF_VAR_user_site: "true"
       TF_VAR_http_only: "true"
+      TF_VAR_xc_api_disc: "true"
 
     steps:
       - name: Checkout
