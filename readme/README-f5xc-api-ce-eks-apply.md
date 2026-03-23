@@ -411,11 +411,29 @@ Una vez que el workflow finaliza correctamente, la aplicación crAPI queda expue
    La respuesta incluye un mensaje de verificación. crAPI envía un email de confirmación interno.
 
 2. **Verificar la cuenta con Mailhog:**
-   Mailhog captura todos los emails enviados por crAPI. La URL del portal de Mailhog corresponde al External IP del servicio `mailhog` en el namespace `crapi`:
+   Mailhog captura todos los emails enviados por crAPI (verificación de cuenta, reset de contraseña, etc.).
+
+   > **¿Por qué no funciona `http://<APP_DOMAIN>:8025`?**
+   > `APP_DOMAIN` (p.ej. `casos.accessq.com`) apunta al **Regional Edge de F5 XC**, que solo tiene configurado un HTTP Load Balancer en el **puerto 80**. El puerto 8025 no existe en F5 XC y el tráfico es descartado.
+   > Mailhog queda expuesto directamente via un **AWS ELB propio**, provisionado por Kubernetes al crear el servicio de tipo `LoadBalancer` en el namespace `crapi`. Este ELB es independiente de F5 XC.
+
+   Para obtener la URL de Mailhog, primero actualizar el kubeconfig y luego consultar el servicio:
    ```bash
+   aws eks update-kubeconfig --region <AWS_REGION> --name <cluster-name>
    kubectl get svc -n crapi mailhog
    ```
+   La columna `EXTERNAL-IP` muestra el hostname del ELB de AWS. Ejemplo de output:
+   ```
+   NAME      TYPE           CLUSTER-IP     EXTERNAL-IP                                                               PORT(S)          AGE
+   mailhog   LoadBalancer   172.20.x.x     aa739714051cd421f9652bed09553419-1867348507.us-east-1.elb.amazonaws.com   8025:32xxx/TCP   5m
+   ```
    Abrir `http://<EXTERNAL-IP>:8025` en el navegador, buscar el email de verificación y hacer clic en el enlace de confirmación.
+
+   ```
+   Internet → casos.accessq.com:80 → F5 XC RE → CE → crapi-web:80   ✅ (pasa por XC)
+   Internet → casos.accessq.com:8025 → F5 XC RE → ❌ (no hay LB en ese puerto)
+   Internet → <aws-elb>:8025 → AWS ELB → pods mailhog:8025           ✅ (directo, sin XC)
+   ```
 
 3. **Iniciar sesión** para obtener el token JWT:
    ```bash
