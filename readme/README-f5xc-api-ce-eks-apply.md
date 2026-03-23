@@ -355,7 +355,7 @@ Crea o actualiza los cinco workspaces en Terraform Cloud vía la API REST:
   ╔══════════════════════════════════════════════════════════════╗
   ║              DEPLOYMENT ENDPOINTS SUMMARY                   ║
   ╠══════════════════════════════════════════════════════════════╣
-  ║ CRAPI_DOMAIN  : casos.accessq.com
+  ║ CRAPI_DOMAIN  : crapi.digitalvs.com
   ║ CRAPI_DOMAIN IP (DNS): 5.182.x.x
   ╠══════════════════════════════════════════════════════════════╣
   ║ ELB #1 — crapi-web (acceso directo :80/:443)
@@ -365,7 +365,7 @@ Crea o actualiza los cinco workspaces en Terraform Cloud vía la API REST:
   ║   def456.us-east-1.elb.amazonaws.com
   ╠══════════════════════════════════════════════════════════════╣
   ║ URLs de acceso:
-  ║   crAPI (via F5 XC RE) : http://casos.accessq.com
+  ║   crAPI (via F5 XC RE) : http://crapi.digitalvs.com
   ║   crAPI (directo)      : http://abc123.us-east-1.elb.amazonaws.com
   ║   Mailhog              : http://def456.us-east-1.elb.amazonaws.com:8025
   ╚══════════════════════════════════════════════════════════════╝
@@ -472,13 +472,27 @@ EKS provisiona un AWS Classic Load Balancer por cada servicio Kubernetes de tipo
   Los ELBs creados por Kubernetes (`crapi-web`, `mailhog-ingress`, `lb-ver`) no son gestionados por Terraform y quedan activos dentro del VPC bloqueando su eliminación. El workflow de destroy ya incluye un step previo al destroy del cluster EKS que:
   1. Descubre el cluster por prefijo y actualiza el kubeconfig.
   2. Ejecuta `kubectl delete svc crapi-web mailhog-ingress -n crapi` y `kubectl delete svc lb-ver -n ves-system`.
-  3. Espera 60 segundos para que AWS elimine los ELBs antes de continuar con `terraform destroy`.
+  3. Elimina el secret `crapi-chatbot-secret` si existe.
+  4. Espera 60 segundos para que AWS elimine los ELBs antes de continuar con `terraform destroy`.
+
+- **El chatbot queda en `CrashLoopBackOff`:**
+  La imagen `crapi/crapi-chatbot` usa la variable `SERVER_PORT` (no `PORT`) para arrancar uvicorn. Si el pod falla, verificar con:
+  ```bash
+  kubectl logs -n crapi -l app=crapi-chatbot --tail=5
+  ```
+  El Helm chart ya define `SERVER_PORT` correctamente. Si ocurre en el clúster actual sin re-deploy:
+  ```bash
+  kubectl set env deployment/crapi-chatbot -n crapi SERVER_PORT=9999
+  ```
+
+- **"Could not connect to mechanic api" en la UI de crAPI:**
+  El endpoint del mecánico hace un callback a `CRAPI_DOMAIN`. Verificar que el dominio tenga un registro DNS público activo apuntando al Regional Edge de F5 XC. Sin DNS público, los pods del clúster no pueden resolver el dominio y el callback falla.
 
 ---
 
 ## Uso de la aplicación crAPI
 
-Una vez que el workflow finaliza correctamente, la aplicación crAPI queda expuesta en la URL configurada en `CRAPI_DOMAIN` (por ejemplo, `http://casos.accessq.com`).
+Una vez que el workflow finaliza correctamente, la aplicación crAPI queda expuesta en la URL configurada en `CRAPI_DOMAIN` (por ejemplo, `http://crapi.digitalvs.com`).
 
 ### Registro e inicio de sesión
 
@@ -494,7 +508,7 @@ Una vez que el workflow finaliza correctamente, la aplicación crAPI queda expue
    Mailhog captura todos los emails enviados por crAPI (verificación de cuenta, reset de contraseña, etc.).
 
    > **¿Por qué no funciona `http://<CRAPI_DOMAIN>:8025`?**
-   > `CRAPI_DOMAIN` (p.ej. `casos.accessq.com`) apunta al **Regional Edge de F5 XC**, que solo tiene configurado un HTTP Load Balancer en el **puerto 80**. El puerto 8025 no existe en F5 XC y el tráfico es descartado.
+   > `CRAPI_DOMAIN` (p.ej. `crapi.digitalvs.com`) apunta al **Regional Edge de F5 XC**, que solo tiene configurado un HTTP Load Balancer en el **puerto 80**. El puerto 8025 no existe en F5 XC y el tráfico es descartado.
    > Mailhog queda expuesto directamente via un **AWS ELB propio**, provisionado por Kubernetes al crear el servicio de tipo `LoadBalancer` en el namespace `crapi`. Este ELB es independiente de F5 XC.
 
    Para obtener la URL de Mailhog, primero actualizar el kubeconfig y luego consultar el servicio:
@@ -510,8 +524,8 @@ Una vez que el workflow finaliza correctamente, la aplicación crAPI queda expue
    Abrir `http://<EXTERNAL-IP>:8025` en el navegador, buscar el email de verificación y hacer clic en el enlace de confirmación.
 
    ```
-   Internet → casos.accessq.com:80 → F5 XC RE → CE → crapi-web:80   ✅ (pasa por XC)
-   Internet → casos.accessq.com:8025 → F5 XC RE → ❌ (no hay LB en ese puerto)
+   Internet → crapi.digitalvs.com:80 → F5 XC RE → CE → crapi-web:80   ✅ (pasa por XC)
+   Internet → crapi.digitalvs.com:8025 → F5 XC RE → ❌ (no hay LB en ese puerto)
    Internet → <aws-elb>:8025 → AWS ELB → pods mailhog:8025           ✅ (directo, sin XC)
    ```
 

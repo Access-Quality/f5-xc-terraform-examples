@@ -325,6 +325,9 @@ jobs:
           echo "Deleting LoadBalancer services in namespace crapi..."
           kubectl delete svc crapi-web mailhog-web-ingress -n crapi --ignore-not-found=true
 
+          echo "Deleting chatbot secret..."
+          kubectl delete secret crapi-chatbot-secret -n crapi --ignore-not-found=true
+
           echo "Deleting LoadBalancer service lb-ver in namespace ves-system..."
           kubectl delete svc lb-ver -n ves-system --ignore-not-found=true
 
