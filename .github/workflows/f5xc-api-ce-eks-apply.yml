@@ -416,6 +416,7 @@ jobs:
       # EKS CE site origin pool via k8s service
       TF_VAR_eks_ce_site: "true"
       TF_VAR_k8s_pool: "true"
+      TF_VAR_xc_service_discovery: "true"
       TF_VAR_serviceName: "crapi-web.crapi"
       TF_VAR_serviceport: "80"
       TF_VAR_site_name: ${{ vars.PROJECT_PREFIX }}
