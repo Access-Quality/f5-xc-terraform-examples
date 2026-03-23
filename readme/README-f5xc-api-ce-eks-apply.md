@@ -246,7 +246,7 @@ Configurar en **Settings → Secrets and variables → Variables**:
 | Variable         | Ejemplo                              | Descripción                                            |
 | ---------------- | ------------------------------------ | ------------------------------------------------------ |
 | `XC_NAMESPACE`   | `crapi-prod`                         | Namespace de F5 XC donde se crea el LB y WAF           |
-| `APP_DOMAIN`     | `crapi.prod.example.com`             | FQDN de la aplicación en el HTTP LB de F5 XC           |
+| `CRAPI_DOMAIN`   | `crapi.prod.example.com`             | FQDN de la aplicación en el HTTP LB de F5 XC           |
 | `CE_LATITUDE`    | `37.3861`                            | Latitud geográfica para el registro del CE Site en XC  |
 | `CE_LONGITUDE`   | `-122.0839`                          | Longitud geográfica para el registro del CE Site en XC |
 
@@ -348,15 +348,15 @@ Crea o actualiza los cinco workspaces en Terraform Cloud vía la API REST:
   - Descubre el nombre del clúster EKS buscando por prefijo (`PROJECT_PREFIX`) con `aws eks list-clusters`.
   - Actualiza el kubeconfig con `aws eks update-kubeconfig`.
   - Consulta el `EXTERNAL-IP` de los servicios `crapi-web` y `mailhog-ingress` en el namespace `crapi`.
-  - Resuelve el `APP_DOMAIN` a IP con `dig +short` para confirmar que el DNS apunta al Regional Edge de F5 XC.
+  - Resuelve el `CRAPI_DOMAIN` a IP con `dig +short` para confirmar que el DNS apunta al Regional Edge de F5 XC.
   - Imprime un resumen formateado con todos los endpoints de acceso.
 - **Output de ejemplo:**
   ```
   ╔══════════════════════════════════════════════════════════════╗
   ║              DEPLOYMENT ENDPOINTS SUMMARY                   ║
   ╠══════════════════════════════════════════════════════════════╣
-  ║ APP_DOMAIN  : casos.accessq.com
-  ║ APP_DOMAIN IP (DNS): 5.182.x.x
+  ║ CRAPI_DOMAIN  : casos.accessq.com
+  ║ CRAPI_DOMAIN IP (DNS): 5.182.x.x
   ╠══════════════════════════════════════════════════════════════╣
   ║ ELB #1 — crapi-web (acceso directo :80/:443)
   ║   abc123.us-east-1.elb.amazonaws.com
@@ -478,13 +478,13 @@ EKS provisiona un AWS Classic Load Balancer por cada servicio Kubernetes de tipo
 
 ## Uso de la aplicación crAPI
 
-Una vez que el workflow finaliza correctamente, la aplicación crAPI queda expuesta en la URL configurada en `APP_DOMAIN` (por ejemplo, `http://casos.accessq.com`).
+Una vez que el workflow finaliza correctamente, la aplicación crAPI queda expuesta en la URL configurada en `CRAPI_DOMAIN` (por ejemplo, `http://casos.accessq.com`).
 
 ### Registro e inicio de sesión
 
 1. **Crear una cuenta** enviando un POST al endpoint de registro:
    ```bash
-   curl -s -X POST http://<APP_DOMAIN>/identity/api/auth/signup \
+   curl -s -X POST http://<CRAPI_DOMAIN>/identity/api/auth/signup \
      -H "Content-Type: application/json" \
      -d '{"email":"usuario@ejemplo.com","name":"Nombre Apellido","password":"Password123!","number":"1234567890"}'
    ```
@@ -493,8 +493,8 @@ Una vez que el workflow finaliza correctamente, la aplicación crAPI queda expue
 2. **Verificar la cuenta con Mailhog:**
    Mailhog captura todos los emails enviados por crAPI (verificación de cuenta, reset de contraseña, etc.).
 
-   > **¿Por qué no funciona `http://<APP_DOMAIN>:8025`?**
-   > `APP_DOMAIN` (p.ej. `casos.accessq.com`) apunta al **Regional Edge de F5 XC**, que solo tiene configurado un HTTP Load Balancer en el **puerto 80**. El puerto 8025 no existe en F5 XC y el tráfico es descartado.
+   > **¿Por qué no funciona `http://<CRAPI_DOMAIN>:8025`?**
+   > `CRAPI_DOMAIN` (p.ej. `casos.accessq.com`) apunta al **Regional Edge de F5 XC**, que solo tiene configurado un HTTP Load Balancer en el **puerto 80**. El puerto 8025 no existe en F5 XC y el tráfico es descartado.
    > Mailhog queda expuesto directamente via un **AWS ELB propio**, provisionado por Kubernetes al crear el servicio de tipo `LoadBalancer` en el namespace `crapi`. Este ELB es independiente de F5 XC.
 
    Para obtener la URL de Mailhog, primero actualizar el kubeconfig y luego consultar el servicio:
@@ -517,7 +517,7 @@ Una vez que el workflow finaliza correctamente, la aplicación crAPI queda expue
 
 3. **Iniciar sesión** para obtener el token JWT:
    ```bash
-   curl -s -X POST http://<APP_DOMAIN>/identity/api/auth/login \
+   curl -s -X POST http://<CRAPI_DOMAIN>/identity/api/auth/login \
      -H "Content-Type: application/json" \
      -d '{"email":"usuario@ejemplo.com","password":"Password123!"}' | jq .token
    ```
@@ -540,7 +540,7 @@ Una vez que el workflow finaliza correctamente, la aplicación crAPI queda expue
 
 ### Interfaz web
 
-crAPI también expone una interfaz web en `http://<APP_DOMAIN>`. Acceder en el navegador, registrar una cuenta (o usar la existente) y explorar el dashboard, el garage virtual y la tienda.
+crAPI también expone una interfaz web en `http://<CRAPI_DOMAIN>`. Acceder en el navegador, registrar una cuenta (o usar la existente) y explorar el dashboard, el garage virtual y la tienda.
 
 ### Chatbot de crAPI
 
@@ -579,4 +579,4 @@ crAPI está diseñada deliberadamente con vulnerabilidades para fines de laborat
 5. Monitorear el progreso: los 6 jobs se ejecutan en secuencia:
    - Jobs 0–4: infraestructura, EKS, crAPI y CE.
    - Job 5 (`terraform_xc`): espera 3 minutos, aprueba el registro del CE y crea el Load Balancer en F5 XC.
-   - Job 6 (`show_endpoints`): imprime las URLs de acceso finales (APP_DOMAIN + ELBs de AWS) directamente en el log del workflow.
+   - Job 6 (`show_endpoints`): imprime las URLs de acceso finales (CRAPI_DOMAIN + ELBs de AWS) directamente en el log del workflow.

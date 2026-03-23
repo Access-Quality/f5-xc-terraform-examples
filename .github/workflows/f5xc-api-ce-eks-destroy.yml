@@ -105,7 +105,7 @@ jobs:
       TF_VAR_api_url: ${{ secrets.XC_API_URL }}
       TF_VAR_xc_tenant: ${{ secrets.XC_TENANT }}
       TF_VAR_xc_namespace: ${{ vars.XC_NAMESPACE }}
-      TF_VAR_app_domain: ${{ vars.APP_DOMAIN }}
+      TF_VAR_app_domain: ${{ vars.CRAPI_DOMAIN }}
       TF_VAR_tf_cloud_organization: ${{ secrets.TF_CLOUD_ORGANIZATION }}
       TF_VAR_xc_p12_password: ${{ secrets.XC_P12_PASSWORD }}
       VES_P12_PASSWORD: ${{ secrets.XC_P12_PASSWORD }}

@@ -25,7 +25,7 @@ name: "Seguridad API en RE para EKS con CE"
 #   CE_LONGITUDE                - Longitude for CE site registration
 #   AZS                         - AWS Availability Zones as JSON list (e.g. ["us-east-1a","us-east-1b"])
 #   XC_NAMESPACE                - F5 XC namespace for app objects
-#   APP_DOMAIN                  - FQDN for the app (e.g. app.prod.example.com)
+#   CRAPI_DOMAIN                - FQDN for the app (e.g. app.prod.example.com)
 
 on:
   workflow_dispatch:
@@ -409,7 +409,7 @@ jobs:
       TF_VAR_api_url: ${{ secrets.XC_API_URL }}
       TF_VAR_xc_tenant: ${{ secrets.XC_TENANT }}
       TF_VAR_xc_namespace: ${{ vars.XC_NAMESPACE }}
-      TF_VAR_app_domain: ${{ vars.APP_DOMAIN }}
+      TF_VAR_app_domain: ${{ vars.CRAPI_DOMAIN }}
       TF_VAR_tf_cloud_organization: ${{ secrets.TF_CLOUD_ORGANIZATION }}
       TF_VAR_xc_p12_password: ${{ secrets.XC_P12_PASSWORD }}
       VES_P12_PASSWORD: ${{ secrets.XC_P12_PASSWORD }}
@@ -528,15 +528,15 @@ jobs:
             -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "pending")
           ELB2=$(kubectl get svc mailhog-web-ingress -n crapi \
             -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "pending")
-          APP_DOMAIN="${{ vars.APP_DOMAIN }}"
-          APP_IP=$(host "$APP_DOMAIN" 2>/dev/null | awk '/has address/ { print $4; exit }')
+          CRAPI_DOMAIN="${{ vars.CRAPI_DOMAIN }}"
+          APP_IP=$(host "$CRAPI_DOMAIN" 2>/dev/null | awk '/has address/ { print $4; exit }')
 
           echo ""
           echo "╔══════════════════════════════════════════════════════════════╗"
           echo "║              DEPLOYMENT ENDPOINTS SUMMARY                   ║"
           echo "╠══════════════════════════════════════════════════════════════╣"
-          echo "║ APP_DOMAIN  : $APP_DOMAIN"
-          echo "║ APP_DOMAIN IP (DNS): $APP_IP"
+          echo "║ CRAPI_DOMAIN  : $CRAPI_DOMAIN"
+          echo "║ CRAPI_DOMAIN IP (DNS): $APP_IP"
           echo "╠══════════════════════════════════════════════════════════════╣"
           echo "║ ELB #1 — crapi-web (acceso directo :80/:443)"
           echo "║   $ELB1"
@@ -545,7 +545,7 @@ jobs:
           echo "║   $ELB2"
           echo "╠══════════════════════════════════════════════════════════════╣"
           echo "║ URLs de acceso:"
-          echo "║   crAPI (via F5 XC RE) : http://$APP_DOMAIN"
+          echo "║   crAPI (via F5 XC RE) : http://$CRAPI_DOMAIN"
           echo "║   crAPI (directo)      : http://$ELB1"
           echo "║   Mailhog              : http://$ELB2:8025"
           echo "╚══════════════════════════════════════════════════════════════╝"
