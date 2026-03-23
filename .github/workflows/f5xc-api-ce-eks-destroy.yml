@@ -304,6 +304,27 @@ jobs:
           rm -f /tmp/ssh_key
           echo "TF_VAR_ssh_key=$SSH_PUB_KEY" >> $GITHUB_ENV
 
+      - name: Delete Kubernetes LoadBalancer services (clean up AWS ELBs before VPC destroy)
+        run: |
+          CLUSTER_NAME=$(aws eks list-clusters --region "${{ vars.AWS_REGION }}" \
+            --query "clusters[?starts_with(@,'${{ vars.PROJECT_PREFIX }}')]|[0]" \
+            --output text)
+          if [ -z "$CLUSTER_NAME" ] || [ "$CLUSTER_NAME" = "None" ]; then
+            echo "No EKS cluster found with prefix '${{ vars.PROJECT_PREFIX }}', skipping LoadBalancer cleanup"
+            exit 0
+          fi
+          echo "EKS Cluster: $CLUSTER_NAME"
+          aws eks update-kubeconfig --region "${{ vars.AWS_REGION }}" --name "$CLUSTER_NAME"
+
+          echo "Deleting LoadBalancer services in namespace crapi..."
+          kubectl delete svc crapi-web mailhog-ingress -n crapi --ignore-not-found=true
+
+          echo "Deleting LoadBalancer service lb-ver in namespace ves-system..."
+          kubectl delete svc lb-ver -n ves-system --ignore-not-found=true
+
+          echo "Waiting 60s for AWS to deregister and delete the ELBs..."
+          sleep 60
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
