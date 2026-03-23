@@ -422,6 +422,9 @@ jobs:
       TF_VAR_user_site: "true"
       TF_VAR_http_only: "true"
       TF_VAR_xc_api_disc: "true"
+      # AWS credentials needed to poll CE status via kubectl
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_KEY }}
 
     steps:
       - name: Checkout
@@ -465,6 +468,29 @@ jobs:
           terraform apply -auto-approve -input=false \
             -target=volterra_site_state.site[0] \
             -target=volterra_registration_approval.k8s-ce[0]
+
+      - name: Wait for CE to be ONLINE (ver-0 fully Running)
+        run: |
+          CLUSTER_NAME=$(aws eks list-clusters --region "${{ vars.AWS_REGION }}" \
+            --query "clusters[?starts_with(@,'${{ vars.PROJECT_PREFIX }}')]|[0]" \
+            --output text)
+          aws eks update-kubeconfig --region "${{ vars.AWS_REGION }}" --name "$CLUSTER_NAME"
+
+          echo "Polling until ver-0 is Running with all containers ready (max 15 min)..."
+          for i in $(seq 1 30); do
+            READY=$(kubectl get pod ver-0 -n ves-system --no-headers 2>/dev/null | awk '{print $2}')
+            STATUS=$(kubectl get pod ver-0 -n ves-system --no-headers 2>/dev/null | awk '{print $3}')
+            if [ "$STATUS" = "Running" ] && [ -n "$READY" ]; then
+              CURRENT=$(echo "$READY" | cut -d'/' -f1)
+              TOTAL=$(echo "$READY" | cut -d'/' -f2)
+              if [ "$CURRENT" = "$TOTAL" ]; then
+                echo "CE is ONLINE: ver-0 $READY — proceeding with full apply"
+                break
+              fi
+            fi
+            echo "  Attempt $i/30 — ver-0: ${STATUS:-pending} ${READY:-0/0} — waiting 30s..."
+            sleep 30
+          done
 
       - name: Terraform Plan
         id: plan
