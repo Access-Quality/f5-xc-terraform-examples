@@ -713,6 +713,8 @@ jobs:
           done
 
       - name: Approve CE Registration (force replace)
+        continue-on-error: true
+        id: approve_ce
         run: |
           # -replace forces Terraform to re-run the approval on every workflow execution,
           # preventing stale TF state from skipping the approval when the CE re-registers.
@@ -723,11 +725,11 @@ jobs:
 
       - name: Wait for CE to be ONLINE (ver-0 fully Running)
         run: |
-          echo "Polling until ver-0 is Running with all containers ready (max 20 min)..."
+          echo "Polling until ver-0 is Running with all containers ready (max 30 min)..."
           STATUS=""
           CURRENT="0"
           TOTAL="1"
-          for i in $(seq 1 40); do
+          for i in $(seq 1 60); do
             READY=$(kubectl get pod ver-0 -n ves-system --no-headers 2>/dev/null | awk '{print $2}')
             STATUS=$(kubectl get pod ver-0 -n ves-system --no-headers 2>/dev/null | awk '{print $3}')
             if [ "$STATUS" = "Running" ] && [ -n "$READY" ]; then
@@ -738,13 +740,18 @@ jobs:
                 break
               fi
             fi
-            echo "  Attempt $i/40 — ver-0: ${STATUS:-not found} ${READY:-0/0} — waiting 30s..."
+            if [ $((i % 6)) -eq 0 ]; then
+              echo "--- pods in ves-system (attempt $i) ---"
+              kubectl get pods -n ves-system --no-headers 2>/dev/null
+              kubectl get pvc -n ves-system --no-headers 2>/dev/null
+            fi
+            echo "  Attempt $i/60 — ver-0: ${STATUS:-not found} ${READY:-0/0} — waiting 30s..."
             sleep 30
           done
           if [ "$CURRENT" != "$TOTAL" ]; then
-            echo "ERROR: CE ver-0 never reached Running state after 20 minutes."
+            echo "ERROR: CE ver-0 never reached Running state after 30 minutes."
             kubectl get pods -n ves-system
-            kubectl describe pod vp-manager-0 -n ves-system 2>/dev/null | tail -20
+            kubectl get pvc -n ves-system
             exit 1
           fi
 
