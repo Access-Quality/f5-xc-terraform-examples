@@ -311,8 +311,17 @@ jobs:
 
       - name: Wait for crAPI identity service to be ready
         run: |
-          echo "Waiting for crapi-identity deployment to be ready..."
-          kubectl rollout status deployment/crapi-identity -n crapi --timeout=180s
+          echo "Waiting for crapi-identity deployment to exist..."
+          for i in $(seq 1 30); do
+            if kubectl get deployment crapi-identity -n crapi &>/dev/null; then
+              echo "  Deployment found on attempt $i"
+              break
+            fi
+            echo "  Attempt $i/30 — deployment not yet visible — waiting 10s..."
+            sleep 10
+          done
+          echo "Waiting for crapi-identity rollout to complete (max 10 min)..."
+          kubectl rollout status deployment/crapi-identity -n crapi --timeout=600s
 
       - name: Create MCP server admin user in crAPI
         run: |
