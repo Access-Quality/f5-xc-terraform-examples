@@ -596,19 +596,7 @@ jobs:
             -o swagger.json
 
           # Build JSON request body (python3 ensures proper escaping of spec contents)
-          BODY=$(python3 -c "
-import json, sys
-with open('swagger.json') as f:
-    content = f.read()
-body = {
-    'name': sys.argv[1],
-    'namespace': sys.argv[2],
-    'object_type': 'swagger',
-    'string_value': content,
-    'content_format': 'json',
-    'no_attributes': {}
-}
-print(json.dumps(body))" "${SWAGGER_NAME}" "${NAMESPACE}")
+          BODY=$(python3 -c "import json,sys; f=open('swagger.json'); c=f.read(); f.close(); b={'name':sys.argv[1],'namespace':sys.argv[2],'object_type':'swagger','string_value':c,'content_format':'json','no_attributes':{}}; print(json.dumps(b))" "${SWAGGER_NAME}" "${NAMESPACE}")
 
           # Upload swagger to F5 XC object store (PUT creates a new immutable version)
           RESP=$(curl -sf -X PUT \
