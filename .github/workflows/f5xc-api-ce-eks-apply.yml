@@ -545,6 +545,7 @@ jobs:
       TF_VAR_user_site: "true"
       TF_VAR_http_only: "true"
       TF_VAR_xc_api_disc: "true"
+      TF_VAR_xc_api_pro: "true"
       # AWS credentials needed to poll CE status via kubectl
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_KEY }}
@@ -572,6 +573,55 @@ jobs:
           }
           EOF
           echo "${{ secrets.XC_API_P12_FILE }}" | base64 -d > api.p12
+
+      - name: Upload crAPI swagger to F5 XC object store
+        run: |
+          SWAGGER_NAME="${TF_VAR_project_prefix}-crapi-spec"
+          API_URL="${TF_VAR_api_url}"
+          NAMESPACE="${TF_VAR_xc_namespace}"
+          PASS="${TF_VAR_xc_p12_password}"
+
+          # Extract cert and key from P12 (api.p12 created in previous step)
+          openssl pkcs12 -legacy -in api.p12 -clcerts -nokeys \
+            -passin pass:"${PASS}" -out cert.pem 2>/dev/null || \
+          openssl pkcs12 -in api.p12 -clcerts -nokeys \
+            -passin pass:"${PASS}" -out cert.pem
+          openssl pkcs12 -legacy -in api.p12 -nocerts -nodes \
+            -passin pass:"${PASS}" -out key.pem 2>/dev/null || \
+          openssl pkcs12 -in api.p12 -nocerts -nodes \
+            -passin pass:"${PASS}" -out key.pem
+
+          # Download crAPI OpenAPI spec
+          curl -sf "https://raw.githubusercontent.com/OWASP/crAPI/develop/openapi-spec/crapi-openapi-spec.json" \
+            -o swagger.json
+
+          # Build JSON request body (python3 ensures proper escaping of spec contents)
+          BODY=$(python3 -c "
+import json, sys
+with open('swagger.json') as f:
+    content = f.read()
+body = {
+    'name': sys.argv[1],
+    'namespace': sys.argv[2],
+    'object_type': 'swagger',
+    'string_value': content,
+    'content_format': 'json',
+    'no_attributes': {}
+}
+print(json.dumps(body))" "${SWAGGER_NAME}" "${NAMESPACE}")
+
+          # Upload swagger to F5 XC object store (PUT creates a new immutable version)
+          RESP=$(curl -sf -X PUT \
+            --cert cert.pem --key key.pem \
+            -H "Content-Type: application/json" \
+            -d "${BODY}" \
+            "${API_URL}/public/namespaces/${NAMESPACE}/stored_objects/swagger/${SWAGGER_NAME}")
+
+          # Extract versioned URL from response and export for Terraform
+          SPEC_URL=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['metadata']['url'])")
+          echo "Swagger uploaded: ${SPEC_URL}"
+          python3 -c "import sys,json; print('TF_VAR_xc_api_spec=' + json.dumps([sys.argv[1]]))" "${SPEC_URL}" >> "$GITHUB_ENV"
+          rm -f cert.pem key.pem swagger.json
 
       - name: Terraform Init
         id: init
