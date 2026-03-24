@@ -243,6 +243,16 @@ jobs:
       - name: Terraform Apply
         run: terraform apply -auto-approve -input=false
 
+      - name: Set gp2 as default StorageClass
+        run: |
+          CLUSTER_NAME=$(aws eks list-clusters --region "${{ vars.AWS_REGION }}" \
+            --query "clusters[?starts_with(@,'${{ vars.PROJECT_PREFIX }}')]|[0]" \
+            --output text)
+          aws eks update-kubeconfig --region "${{ vars.AWS_REGION }}" --name "$CLUSTER_NAME"
+          kubectl patch storageclass gp2 \
+            -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
+          echo "gp2 set as default StorageClass — all PVCs without storageClassName will use gp2"
+
   # -------------------------------------------------------
   # Job 3: crAPI Application (Helm)
   # -------------------------------------------------------
