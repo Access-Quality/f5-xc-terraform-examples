@@ -309,6 +309,21 @@ jobs:
             --output text)
           aws eks update-kubeconfig --region "${{ vars.AWS_REGION }}" --name "$CLUSTER_NAME"
 
+      - name: Wait for EKS nodes to be Ready
+        run: |
+          echo "Waiting for all EKS nodes to be Ready (max 10 min)..."
+          for i in $(seq 1 60); do
+            NOT_READY=$(kubectl get nodes --no-headers 2>/dev/null | grep -v " Ready" | wc -l)
+            TOTAL=$(kubectl get nodes --no-headers 2>/dev/null | wc -l)
+            if [ "$TOTAL" -gt 0 ] && [ "$NOT_READY" -eq 0 ]; then
+              echo "All $TOTAL node(s) are Ready"
+              kubectl get nodes
+              break
+            fi
+            echo "  Attempt $i/60 — $NOT_READY/$TOTAL nodes not Ready — waiting 10s..."
+            sleep 10
+          done
+
       - name: Wait for crAPI identity service to be ready
         run: |
           echo "Waiting for crapi-identity deployment to exist..."
@@ -320,8 +335,30 @@ jobs:
             echo "  Attempt $i/30 — deployment not yet visible — waiting 10s..."
             sleep 10
           done
-          echo "Waiting for crapi-identity rollout to complete (max 10 min)..."
-          kubectl rollout status deployment/crapi-identity -n crapi --timeout=600s
+          echo "Waiting for crapi-identity rollout to complete (max 15 min)..."
+          for i in $(seq 1 90); do
+            READY=$(kubectl get deployment crapi-identity -n crapi \
+              -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+            DESIRED=$(kubectl get deployment crapi-identity -n crapi \
+              -o jsonpath='{.status.replicas}' 2>/dev/null || echo "1")
+            if [ "${READY:-0}" -ge 1 ] && [ "${READY}" = "${DESIRED}" ]; then
+              echo "crapi-identity is ready ($READY/$DESIRED)"
+              break
+            fi
+            if [ $((i % 6)) -eq 0 ]; then
+              echo "--- pod status at attempt $i ---"
+              kubectl get pods -n crapi -l app=crapi-identity 2>/dev/null || true
+              kubectl describe pod -n crapi -l app=crapi-identity 2>/dev/null | grep -A5 "Events:" | tail -10 || true
+            fi
+            echo "  Attempt $i/90 — ready: ${READY:-0}/${DESIRED:-1} — waiting 10s..."
+            sleep 10
+          done
+          if [ "${READY:-0}" -lt 1 ]; then
+            echo "ERROR: crapi-identity never became ready. Final pod state:"
+            kubectl get pods -n crapi
+            kubectl describe pod -n crapi -l app=crapi-identity | tail -30
+            exit 1
+          fi
 
       - name: Create MCP server admin user in crAPI
         run: |
