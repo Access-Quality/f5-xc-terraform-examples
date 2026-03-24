@@ -347,8 +347,12 @@ jobs:
             fi
             if [ $((i % 6)) -eq 0 ]; then
               echo "--- pod status at attempt $i ---"
-              kubectl get pods -n crapi -l app=crapi-identity 2>/dev/null || true
-              kubectl describe pod -n crapi -l app=crapi-identity 2>/dev/null | grep -A5 "Events:" | tail -10 || true
+              kubectl get pods -n crapi 2>/dev/null || true
+              kubectl get pvc -n crapi 2>/dev/null || true
+              echo "--- crapi-identity events ---"
+              kubectl describe pod -n crapi -l app=crapi-identity 2>/dev/null | grep -A10 "Events:" | tail -15 || true
+              echo "--- postgresdb events ---"
+              kubectl describe pod -n crapi -l app=postgresdb 2>/dev/null | grep -A10 "Events:" | tail -15 || true
             fi
             echo "  Attempt $i/90 — ready: ${READY:-0}/${DESIRED:-1} — waiting 10s..."
             sleep 10
