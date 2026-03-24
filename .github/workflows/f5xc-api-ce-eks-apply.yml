@@ -323,23 +323,28 @@ jobs:
             -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
           echo "crAPI ELB: $ELB"
 
-          for i in $(seq 1 10); do
-            HTTP=$(curl -s -o /dev/null -w "%{http_code}" "http://$ELB/identity/health_check" 2>/dev/null)
+          for i in $(seq 1 20); do
+            # Use || true so curl DNS failures don't abort the script under bash -e
+            HTTP=$(curl -s -o /dev/null -w "%{http_code}" \
+              --connect-timeout 5 --max-time 10 \
+              "http://$ELB/identity/health_check" 2>/dev/null || echo "000")
             if [ "$HTTP" = "200" ]; then
               echo "crAPI identity is reachable (HTTP $HTTP)"
               break
             fi
-            echo "  Attempt $i/10 — HTTP ${HTTP:-none} — waiting 15s..."
+            echo "  Attempt $i/20 — HTTP ${HTTP} — waiting 15s..."
             sleep 15
           done
 
           RESPONSE=$(curl -s -X POST "http://$ELB/identity/api/auth/signup" \
+            --connect-timeout 5 --max-time 15 \
             -H "Content-Type: application/json" \
-            -d '{"email":"admin@example.com","name":"MCP Admin","number":"5550000000","password":"Admin!123"}')
+            -d '{"email":"admin@example.com","name":"MCP Admin","number":"5550000000","password":"Admin!123"}' \
+            2>/dev/null || echo '{}')
           echo "Signup response: $RESPONSE"
 
           # 200 = created, 403 = already exists — both are acceptable
-          STATUS=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status',''))" 2>/dev/null)
+          STATUS=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status',''))" 2>/dev/null || echo "")
           if [ "$STATUS" = "200" ] || [ "$STATUS" = "403" ]; then
             echo "MCP admin user ready (status: $STATUS)"
           else
