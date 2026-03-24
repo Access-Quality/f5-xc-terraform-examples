@@ -394,27 +394,17 @@ jobs:
           TOKEN_NAME="${{ vars.PROJECT_PREFIX }}-ce-token"
 
           # Decodificar P12 y extraer cert + key en PEM
+          # -legacy es necesario en OpenSSL 3.x (Ubuntu 22+) para leer P12 con
+          # cifrado RC2-40-CBC que usa F5 XC.
           echo "${{ secrets.XC_API_P12_FILE }}" | base64 -d > /tmp/api.p12
-          echo "P12 size: $(wc -c < /tmp/api.p12) bytes"
-          echo "OpenSSL version: $(openssl version)"
-
+          openssl pkcs12 -legacy -in /tmp/api.p12 -clcerts -nokeys \
+            -passin pass:"${XC_P12_PASSWORD}" -out /tmp/cert.pem 2>/dev/null || \
           openssl pkcs12 -in /tmp/api.p12 -clcerts -nokeys \
-            -passin pass:"${XC_P12_PASSWORD}" -out /tmp/cert.pem 2>&1 || true
+            -passin pass:"${XC_P12_PASSWORD}" -out /tmp/cert.pem 2>/dev/null
+          openssl pkcs12 -legacy -in /tmp/api.p12 -nocerts -nodes \
+            -passin pass:"${XC_P12_PASSWORD}" -out /tmp/key.pem 2>/dev/null || \
           openssl pkcs12 -in /tmp/api.p12 -nocerts -nodes \
-            -passin pass:"${XC_P12_PASSWORD}" -out /tmp/key.pem 2>&1 || true
-
-          echo "cert.pem lines: $(wc -l < /tmp/cert.pem 2>/dev/null || echo 0)"
-          echo "key.pem lines:  $(wc -l < /tmp/key.pem 2>/dev/null || echo 0)"
-
-          if [ ! -s /tmp/cert.pem ] || [ ! -s /tmp/key.pem ]; then
-            echo "--- Retrying with -legacy flag (OpenSSL 3.x) ---"
-            openssl pkcs12 -legacy -in /tmp/api.p12 -clcerts -nokeys \
-              -passin pass:"${XC_P12_PASSWORD}" -out /tmp/cert.pem 2>&1 || true
-            openssl pkcs12 -legacy -in /tmp/api.p12 -nocerts -nodes \
-              -passin pass:"${XC_P12_PASSWORD}" -out /tmp/key.pem 2>&1 || true
-            echo "cert.pem lines after -legacy: $(wc -l < /tmp/cert.pem 2>/dev/null || echo 0)"
-            echo "key.pem lines after -legacy:  $(wc -l < /tmp/key.pem 2>/dev/null || echo 0)"
-          fi
+            -passin pass:"${XC_P12_PASSWORD}" -out /tmp/key.pem 2>/dev/null
 
           if [ ! -s /tmp/cert.pem ] || [ ! -s /tmp/key.pem ]; then
             echo "ERROR: No se pudo extraer cert/key del P12."
@@ -422,26 +412,24 @@ jobs:
           fi
 
           # Intentar obtener token existente con ese nombre
-          echo "--- GET token ---"
-          EXISTING=$(curl -sv \
+          EXISTING=$(curl -s \
             --cert /tmp/cert.pem --key /tmp/key.pem \
-            "${XC_API_URL}/register/namespaces/system/tokens/${TOKEN_NAME}" 2>&1 || echo "")
-          echo "GET response: $EXISTING"
+            "${XC_API_URL}/register/namespaces/system/tokens/${TOKEN_NAME}" 2>/dev/null || echo "")
 
+          # El token UUID está en system_metadata.uid (no en spec.token)
           TOKEN_VALUE=$(echo "$EXISTING" | \
-            python3 -c "import sys,json; print(json.load(sys.stdin)['spec']['token'])" 2>/dev/null || echo "")
+            python3 -c "import sys,json; print(json.load(sys.stdin)['system_metadata']['uid'])" 2>/dev/null || echo "")
 
           # Si no existe, crearlo
           if [ -z "$TOKEN_VALUE" ]; then
-            echo "--- POST create token ---"
-            RESPONSE=$(curl -sv \
+            echo "Token '${TOKEN_NAME}' not found — creating..."
+            RESPONSE=$(curl -s \
               --cert /tmp/cert.pem --key /tmp/key.pem \
               -X POST "${XC_API_URL}/register/namespaces/system/tokens" \
               -H "Content-Type: application/json" \
-              -d "{\"metadata\":{\"name\":\"${TOKEN_NAME}\",\"namespace\":\"system\"},\"spec\":{}}" 2>&1 || echo "")
-            echo "POST response: $RESPONSE"
+              -d "{\"metadata\":{\"name\":\"${TOKEN_NAME}\",\"namespace\":\"system\"},\"spec\":{}}" 2>/dev/null)
             TOKEN_VALUE=$(echo "$RESPONSE" | \
-              python3 -c "import sys,json; print(json.load(sys.stdin)['spec']['token'])" 2>/dev/null || echo "")
+              python3 -c "import sys,json; print(json.load(sys.stdin)['system_metadata']['uid'])" 2>/dev/null || echo "")
           fi
 
           rm -f /tmp/api.p12 /tmp/cert.pem /tmp/key.pem
