@@ -645,6 +645,21 @@ jobs:
           curl -sf "https://raw.githubusercontent.com/OWASP/crAPI/develop/openapi-spec/crapi-openapi-spec.json" \
             -o swagger.json
 
+          # Strip empty string keys (F5 XC rejects specs containing them)
+          python3 -c "
+import json
+def clean(o):
+    if isinstance(o, dict):
+        return {k: clean(v) for k, v in o.items() if k != ''}
+    if isinstance(o, list):
+        return [clean(i) for i in o]
+    return o
+with open('swagger.json') as f:
+    data = json.load(f)
+with open('swagger.json', 'w') as f:
+    json.dump(clean(data), f)
+"
+
           # Build JSON request body (python3 ensures proper escaping of spec contents)
           BODY=$(python3 -c "import json,sys; f=open('swagger.json'); c=f.read(); f.close(); b={'name':sys.argv[1],'namespace':sys.argv[2],'object_type':'swagger','string_value':c,'content_format':'json','no_attributes':{}}; print(json.dumps(b))" "${SWAGGER_NAME}" "${NAMESPACE}")
 
