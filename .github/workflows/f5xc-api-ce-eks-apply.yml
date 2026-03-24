@@ -649,11 +649,18 @@ jobs:
           BODY=$(python3 -c "import json,sys; f=open('swagger.json'); c=f.read(); f.close(); b={'name':sys.argv[1],'namespace':sys.argv[2],'object_type':'swagger','string_value':c,'content_format':'json','no_attributes':{}}; print(json.dumps(b))" "${SWAGGER_NAME}" "${NAMESPACE}")
 
           # Upload swagger to F5 XC object store (PUT creates a new immutable version)
-          RESP=$(curl -sf -X PUT \
+          RESP=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X PUT \
             --cert cert.pem --key key.pem \
             -H "Content-Type: application/json" \
             -d "${BODY}" \
-            "${API_URL}/public/namespaces/${NAMESPACE}/stored_objects/swagger/${SWAGGER_NAME}")
+            "${API_URL}/object_store/namespaces/${NAMESPACE}/stored_objects/swagger/${SWAGGER_NAME}")
+          HTTP_STATUS=$(echo "${RESP}" | grep -o "HTTP_STATUS:[0-9]*" | cut -d: -f2)
+          RESP=$(echo "${RESP}" | sed '/HTTP_STATUS:/d')
+          if [ "${HTTP_STATUS}" != "200" ]; then
+            echo "ERROR: Upload failed with HTTP ${HTTP_STATUS}"
+            echo "Response: ${RESP}"
+            exit 1
+          fi
 
           # Extract versioned URL from response and export for Terraform
           SPEC_URL=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['metadata']['url'])")

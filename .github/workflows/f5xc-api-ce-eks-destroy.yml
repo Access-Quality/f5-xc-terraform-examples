@@ -174,7 +174,7 @@ jobs:
 
           HTTP=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
             --cert /tmp/cert.pem --key /tmp/key.pem \
-            "${API_URL}/public/namespaces/${NAMESPACE}/stored_objects/swagger/${SWAGGER_NAME}")
+            "${API_URL}/object_store/namespaces/${NAMESPACE}/stored_objects/swagger/${SWAGGER_NAME}")
           echo "Delete swagger '${SWAGGER_NAME}': HTTP ${HTTP}"
           rm -f /tmp/cert.pem /tmp/key.pem
 
