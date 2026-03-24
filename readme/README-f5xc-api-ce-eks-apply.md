@@ -71,7 +71,7 @@ Internet
 | --------------------- | ------------------------------------------------------------------------------------------------ |
 | Tipo de CE            | **Kubernetes workload** (no EC2) — namespace `ves-system`                                        |
 | Hardware certificado  | `k8s-minikube-voltmesh`                                                                          |
-| Registro              | Token pre-generado (`XC_CE_TOKEN`) + ConfigMap `vpm-cfg`                                        |
+| Registro              | Token auto-creado vía API REST de F5 XC + ConfigMap `vpm-cfg` (el secret `XC_CE_TOKEN` es opcional) |
 | Geolocalización       | `CE_LATITUDE` / `CE_LONGITUDE` configurados como variables del repositorio                       |
 | Endpoint Maurice      | `https://register.ves.volterra.io` / `https://register-tls.ves.volterra.io`                     |
 | Tiempo de espera      | Polling de `vp-manager-0` hasta `1/1 Running` + 90s adicionales antes de aprobar el registro en Job 5 |
@@ -203,7 +203,7 @@ Configurar en **Settings → Secrets and variables → Secrets**:
 | `XC_API_URL`      | URL de la API de F5 XC (`https://<tenant>.console.ves.volterra.io/api`) |
 | `XC_P12_PASSWORD` | Contraseña del certificado `.p12` de F5 XC                              |
 | `XC_API_P12_FILE` | Certificado API de F5 XC en formato `.p12` codificado en **base64**     |
-| `XC_CE_TOKEN`     | Token de pre-registro del CE generado en la consola de F5 XC            |
+| `XC_CE_TOKEN`     | *(Opcional)* Token de pre-registro del CE. **Si no se configura, el workflow lo crea automáticamente** via la API REST de F5 XC usando las credenciales `XC_API_P12_FILE` / `XC_P12_PASSWORD`. El token se llama `${PROJECT_PREFIX}-ce-token` y se elimina al final del destroy. |
 
 ### Chatbot (opcional)
 
@@ -311,10 +311,12 @@ Crea o actualiza los cinco workspaces en Terraform Cloud vía la API REST:
     - `ClusterName`: valor de `PROJECT_PREFIX`.
     - `CertifiedHardware`: `k8s-minikube-voltmesh`.
     - `Latitude` / `Longitude`: coordenadas del CE Site.
-    - `Token`: `XC_CE_TOKEN` para el pre-registro en F5 XC.
+    - `Token`: token de pre-registro del CE (auto-creado o proveniente del secret `XC_CE_TOKEN`).
     - `SkipStages`: omite fases de SO no aplicables en Kubernetes.
   - El CE arranca como pods de Kubernetes en el namespace `ves-system` y se registra automáticamente con F5 XC usando el token.
-- **Step especial:** genera el archivo `configmap.tf` dinámicamente en runtime con los valores de los secretos y variables del repositorio, seguido de `terraform fmt` para normalizar el formato.
+- **Steps especiales:**
+  1. **Create F5 XC Site Token** — si el secret `XC_CE_TOKEN` está configurado, lo usa directamente. Si no, decodifica `XC_API_P12_FILE` con `openssl`, llama a `GET /register/namespaces/system/tokens/${PROJECT_PREFIX}-ce-token` para reutilizar uno existente o `POST` para crear uno nuevo. El valor se exporta como variable de entorno para el step siguiente.
+  2. Genera `configmap.tf` dinámicamente con los valores obtenidos, seguido de `terraform fmt`.
 
 ### `terraform_xc` — F5 XC API Security
 
@@ -400,7 +402,7 @@ flowchart LR
 
     subgraph EKS["EKS Cluster — nodos t3.xlarge"]
       subgraph NS_VES[ves-system]
-        CE["F5 XC CE\nk8s-minikube-voltmesh\nConfigMap: vpm-cfg\nToken: XC_CE_TOKEN"]
+        CE["F5 XC CE\nk8s-minikube-voltmesh\nConfigMap: vpm-cfg\nToken: auto-creado"]
         LB_VER["Service: lb-ver\nLoadBalancer :80"]
       end
       subgraph NS_CRAPI[crapi]
@@ -445,7 +447,7 @@ EKS provisiona un AWS Classic Load Balancer por cada servicio Kubernetes de tipo
 - **El CE Site queda en `PENDING` / `REGISTERING` indefinidamente:**
   El workflow aprueba el registro automáticamente usando `terraform apply -replace=volterra_registration_approval.k8s-ce[0]` (con `-target`). El flag `-replace` es obligatorio para forzar la re-aprobación en cada ejecución; sin él, Terraform omite el paso si el recurso ya existe en el estado de TFC.
   Si persiste tras un re-run del workflow, verificar:
-  - Que el secreto `XC_CE_TOKEN` sea un token de pre-registro válido y no haya expirado. Generar uno nuevo desde la consola de F5 XC en *Multi-Cloud Network Connect → Manage → Site Management → Site Tokens*.
+  - Que el step **Create F5 XC Site Token** (Job 4) haya completado correctamente. Si el secret `XC_CE_TOKEN` no está configurado, el token se crea automáticamente via API. Verificar los logs del step para confirmar que el token fue obtenido o creado. Si falló, revisar que `XC_API_P12_FILE` y `XC_P12_PASSWORD` sean correctos, o crear el token manualmente en la consola de F5 XC (*Multi-Cloud Network Connect → Manage → Site Management → Site Tokens*) y guardarlo como secret `XC_CE_TOKEN`.
   - Que `vp-manager-0` esté `1/1 Running` en el namespace `ves-system` (`kubectl get pods -n ves-system`).
   - Los logs de `vp-manager-0` para ver el estado de la registration (`kubectl logs vp-manager-0 -n ves-system --tail=20`).
 
