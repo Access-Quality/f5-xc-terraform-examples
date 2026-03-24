@@ -395,27 +395,51 @@ jobs:
 
           # Decodificar P12 y extraer cert + key en PEM
           echo "${{ secrets.XC_API_P12_FILE }}" | base64 -d > /tmp/api.p12
+          echo "P12 size: $(wc -c < /tmp/api.p12) bytes"
+          echo "OpenSSL version: $(openssl version)"
+
           openssl pkcs12 -in /tmp/api.p12 -clcerts -nokeys \
-            -passin pass:"${XC_P12_PASSWORD}" -out /tmp/cert.pem 2>/dev/null
+            -passin pass:"${XC_P12_PASSWORD}" -out /tmp/cert.pem 2>&1 || true
           openssl pkcs12 -in /tmp/api.p12 -nocerts -nodes \
-            -passin pass:"${XC_P12_PASSWORD}" -out /tmp/key.pem 2>/dev/null
+            -passin pass:"${XC_P12_PASSWORD}" -out /tmp/key.pem 2>&1 || true
+
+          echo "cert.pem lines: $(wc -l < /tmp/cert.pem 2>/dev/null || echo 0)"
+          echo "key.pem lines:  $(wc -l < /tmp/key.pem 2>/dev/null || echo 0)"
+
+          if [ ! -s /tmp/cert.pem ] || [ ! -s /tmp/key.pem ]; then
+            echo "--- Retrying with -legacy flag (OpenSSL 3.x) ---"
+            openssl pkcs12 -legacy -in /tmp/api.p12 -clcerts -nokeys \
+              -passin pass:"${XC_P12_PASSWORD}" -out /tmp/cert.pem 2>&1 || true
+            openssl pkcs12 -legacy -in /tmp/api.p12 -nocerts -nodes \
+              -passin pass:"${XC_P12_PASSWORD}" -out /tmp/key.pem 2>&1 || true
+            echo "cert.pem lines after -legacy: $(wc -l < /tmp/cert.pem 2>/dev/null || echo 0)"
+            echo "key.pem lines after -legacy:  $(wc -l < /tmp/key.pem 2>/dev/null || echo 0)"
+          fi
+
+          if [ ! -s /tmp/cert.pem ] || [ ! -s /tmp/key.pem ]; then
+            echo "ERROR: No se pudo extraer cert/key del P12."
+            exit 1
+          fi
 
           # Intentar obtener token existente con ese nombre
-          EXISTING=$(curl -sf \
+          echo "--- GET token ---"
+          EXISTING=$(curl -sv \
             --cert /tmp/cert.pem --key /tmp/key.pem \
-            "${XC_API_URL}/register/namespaces/system/tokens/${TOKEN_NAME}" 2>/dev/null || echo "")
+            "${XC_API_URL}/register/namespaces/system/tokens/${TOKEN_NAME}" 2>&1 || echo "")
+          echo "GET response: $EXISTING"
 
           TOKEN_VALUE=$(echo "$EXISTING" | \
             python3 -c "import sys,json; print(json.load(sys.stdin)['spec']['token'])" 2>/dev/null || echo "")
 
           # Si no existe, crearlo
           if [ -z "$TOKEN_VALUE" ]; then
-            echo "Token '${TOKEN_NAME}' not found — creating..."
-            RESPONSE=$(curl -sf \
+            echo "--- POST create token ---"
+            RESPONSE=$(curl -sv \
               --cert /tmp/cert.pem --key /tmp/key.pem \
               -X POST "${XC_API_URL}/register/namespaces/system/tokens" \
               -H "Content-Type: application/json" \
-              -d "{\"metadata\":{\"name\":\"${TOKEN_NAME}\",\"namespace\":\"system\"},\"spec\":{}}" 2>/dev/null)
+              -d "{\"metadata\":{\"name\":\"${TOKEN_NAME}\",\"namespace\":\"system\"},\"spec\":{}}" 2>&1 || echo "")
+            echo "POST response: $RESPONSE"
             TOKEN_VALUE=$(echo "$RESPONSE" | \
               python3 -c "import sys,json; print(json.load(sys.stdin)['spec']['token'])" 2>/dev/null || echo "")
           fi
