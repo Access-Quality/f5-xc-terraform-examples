@@ -74,7 +74,7 @@ Internet
 | Registro              | Token pre-generado (`XC_CE_TOKEN`) + ConfigMap `vpm-cfg`                                        |
 | Geolocalización       | `CE_LATITUDE` / `CE_LONGITUDE` configurados como variables del repositorio                       |
 | Endpoint Maurice      | `https://register.ves.volterra.io` / `https://register-tls.ves.volterra.io`                     |
-| Tiempo de espera      | **3 minutos** (`sleep 180`) en Job 5 antes del `terraform apply -target` que aprueba el registro automáticamente |
+| Tiempo de espera      | Polling de `vp-manager-0` hasta `1/1 Running` + 90s adicionales antes de aprobar el registro en Job 5 |
 | Módulo Terraform      | `f5xc-api-ce-eks/eks-cluster/ce-deployment`                                                      |
 
 #### HTTP Load Balancer (F5 XC)
@@ -297,6 +297,10 @@ Crea o actualiza los cinco workspaces en Terraform Cloud vía la API REST:
   - Release de Helm `crapi` en namespace `crapi` (creado automáticamente) usando el chart local `./helm`.
   - La app crAPI expone el servicio `crapi-web` en puerto `80` dentro del namespace `crapi`.
 - **Dependencias de estado remoto:** lee VPC/subnets de `INFRA` y kubeconfig del cluster de `EKS`.
+- **Steps especiales post-apply:**
+  1. Espera a que el deployment `crapi-identity` esté `Ready` con `kubectl rollout status`.
+  2. Crea el usuario `admin@example.com` / `Admin!123` en crAPI vía el ELB directo. Este usuario es requerido por el **MCP server** del chatbot para autenticarse con crAPI al arrancar. Sin él, el MCP server falla silenciosamente en background y el chatbot responde `unhandled errors in a TaskGroup` en cada pregunta.
+  3. Reinicia el deployment `crapi-chatbot` para asegurar que el MCP server arranque con el usuario ya disponible.
 
 ### `terraform_ce` — F5 XC CE en EKS
 
@@ -321,9 +325,11 @@ Crea o actualiza los cinco workspaces en Terraform Cloud vía la API REST:
   - 1 HTTP Load Balancer (`volterra_http_loadbalancer`) en puerto 80 publicado en el **Regional Edge global** de F5 XC (no `advertise_custom`).
   - 1 WAF Policy (`volterra_app_firewall`) vinculada al HTTP LB.
 - **Flujo de steps especiales:**
-  1. `sleep 180` — espera 3 minutos para que `vp-manager` arranque y envíe el registro a F5 XC.
-  2. `terraform apply -auto-approve -target=volterra_site_state.site[0] -target=volterra_registration_approval.k8s-ce[0]` — aprueba el CE automáticamente antes de que `vp-manager` agote sus reintentos.
-  3. `terraform plan` + `terraform apply -auto-approve` completo — crea el Load Balancer, WAF y Origin Pool una vez el CE está ONLINE.
+  1. **Configure kubectl** — conecta al cluster EKS descubriéndolo por prefijo con `aws eks list-clusters`.
+  2. **Wait for vp-manager-0** — pollea hasta que `vp-manager-0` esté `1/1 Running` (máx. 10 min), luego espera 90s adicionales para que la registration llegue a F5 XC. Reemplaza el anterior `sleep 180` fijo que fallaba cuando el arranque era más lento o más rápido que ese tiempo.
+  3. **Approve CE Registration (force replace)** — ejecuta `terraform apply -replace=volterra_registration_approval.k8s-ce[0]` con `-target`. El flag `-replace` es crítico: fuerza a Terraform a re-ejecutar el approval en cada workflow run, incluso cuando el recurso ya existe en el estado de Terraform Cloud. Sin él, en re-ejecuciones el CE nuevo queda en `PENDING` indefinidamente porque Terraform cree que ya fue aprobado.
+  4. **Wait for CE to be ONLINE** — pollea hasta que `ver-0` esté `Running` con todos los containers listos (máx. 20 min, 40 intentos cada 30s). Falla con `exit 1` y muestra diagnóstico si el CE no llega a Online.
+  5. `terraform plan` + `terraform apply -auto-approve` completo — crea el Load Balancer, WAF y Origin Pool una vez el CE está ONLINE.
 - **Parámetros fijos en el job:**
 
   | Variable Terraform      | Valor              | Propósito                                                          |
@@ -437,7 +443,11 @@ EKS provisiona un AWS Classic Load Balancer por cada servicio Kubernetes de tipo
 ## Troubleshooting rápido
 
 - **El CE Site queda en `PENDING` / `REGISTERING` indefinidamente:**
-  El workflow aprueba el registro automáticamente con `terraform apply -target=volterra_registration_approval.k8s-ce[0]` tras un `sleep 180`. Si persiste, verificar que el secreto `XC_CE_TOKEN` sea un token de pre-registro válido y no haya expirado. Generar uno nuevo desde la consola de F5 XC en *Multi-Cloud Network Connect → Manage → Site Management → Site Tokens*.
+  El workflow aprueba el registro automáticamente usando `terraform apply -replace=volterra_registration_approval.k8s-ce[0]` (con `-target`). El flag `-replace` es obligatorio para forzar la re-aprobación en cada ejecución; sin él, Terraform omite el paso si el recurso ya existe en el estado de TFC.
+  Si persiste tras un re-run del workflow, verificar:
+  - Que el secreto `XC_CE_TOKEN` sea un token de pre-registro válido y no haya expirado. Generar uno nuevo desde la consola de F5 XC en *Multi-Cloud Network Connect → Manage → Site Management → Site Tokens*.
+  - Que `vp-manager-0` esté `1/1 Running` en el namespace `ves-system` (`kubectl get pods -n ves-system`).
+  - Los logs de `vp-manager-0` para ver el estado de la registration (`kubectl logs vp-manager-0 -n ves-system --tail=20`).
 
 - **Error al decodificar `XC_API_P12_FILE`:**
   Confirmar que el archivo esté correctamente codificado en base64:
@@ -447,7 +457,7 @@ EKS provisiona un AWS Classic Load Balancer por cada servicio Kubernetes de tipo
   ```
 
 - **El job `terraform_xc` falla con `site not found`:**
-  El CE necesita estar completamente registrado y ONLINE antes de que Terraform configure el LB. El workflow ya espera 3 minutos y aprueba el registro con `-target`. Si falla igualmente, ejecutar solo el job `terraform_xc` nuevamente una vez que el CE aparezca como `ONLINE` en la consola de F5 XC.
+  El CE necesita estar completamente registrado y ONLINE antes de que Terraform configure el LB. El workflow pollea `ver-0` hasta que esté Running (máx. 20 min) antes del apply completo. Si falla igualmente, re-ejecutar el workflow completo — el paso de approval tiene `-replace` que fuerza la re-aprobación aunque el CE sea nuevo.
 
 - **`crapi-web` no responde en puerto 80:**
   Verificar que el Helm release se haya aplicado correctamente:
@@ -562,11 +572,27 @@ crAPI incluye un chatbot integrado en la interfaz web que utiliza la API de Open
 
 1. **Configurar el secreto** `OPENAI_API_KEY` en **Settings → Secrets and variables → Actions → Secrets** con tu API key de OpenAI (formato `sk-...`).
 
-2. El workflow lo detecta automáticamente y habilita el servicio `crapi-chatbot` durante el deploy de Job 3. Si el secreto no está configurado, el chatbot permanece desactivado (`localhost:9999`).
+2. El workflow lo detecta automáticamente y habilita el servicio `crapi-chatbot` durante el deploy de Job 3. Si el secreto no está configurado, el chatbot permanece desactivado.
 
 3. Una vez desplegado, el chatbot aparece en la interfaz web de crAPI. Al iniciar sesión, el icono de chat en la esquina inferior permite abrir la conversación directamente sin necesidad de introducir la API key manualmente.
 
 > **Nota de seguridad:** El secreto `OPENAI_API_KEY` se inyecta a través de un Kubernetes Secret (`crapi-chatbot-secret`) creado por el Helm chart. No queda expuesto en los logs del workflow ni en el estado de Terraform Cloud.
+
+#### Arquitectura interna del chatbot
+
+El pod `crapi-chatbot` ejecuta **dos procesos en el mismo contenedor**:
+
+| Proceso | Puerto | Descripción |
+|---------|--------|-------------|
+| `uvicorn chatbot.app:app` | `9999` | API principal del chatbot (expuesta via Kubernetes Service) |
+| `python -m mcpserver.server` | `5500` | MCP server interno — provee herramientas de crAPI al agente LangGraph |
+
+El MCP server se comunica con `crapi-identity` al arrancar para obtener un API key usando el usuario `admin@example.com` / `Admin!123`. El workflow crea este usuario automáticamente en el Job 3 (`crAPI App`) tras el deploy del Helm chart.
+
+> **Si el chatbot responde `unhandled errors in a TaskGroup`:** el MCP server no pudo autenticarse con crAPI y terminó. Verificar que el usuario `admin@example.com` exista en crAPI y reiniciar el pod:
+> ```bash
+> kubectl rollout restart deployment/crapi-chatbot -n crapi
+> ```
 
 ### Vulnerabilidades OWASP API Security Top 10
 
@@ -591,6 +617,9 @@ crAPI está diseñada deliberadamente con vulnerabilidades para fines de laborat
 3. Hacer clic en **Run workflow**.
 4. Confirmar en la rama `main` (o la rama configurada).
 5. Monitorear el progreso: los 6 jobs se ejecutan en secuencia:
-   - Jobs 0–4: infraestructura, EKS, crAPI y CE.
-   - Job 5 (`terraform_xc`): espera 3 minutos, aprueba el registro del CE y crea el Load Balancer en F5 XC.
-   - Job 6 (`show_endpoints`): imprime las URLs de acceso finales (CRAPI_DOMAIN + ELBs de AWS) directamente en el log del workflow.
+   - **Job 0** (`setup_tfc_workspaces`): crea workspaces TFC y configura Remote State Sharing.
+   - **Jobs 1–2** (`terraform_infra`, `terraform_eks`): VPC, subnets, EKS cluster.
+   - **Job 3** (`terraform_crapi`): despliega crAPI con Helm, crea el usuario MCP admin y reinicia el chatbot.
+   - **Job 4** (`terraform_ce`): instala el CE como workload en EKS.
+   - **Job 5** (`terraform_xc`): pollea `vp-manager-0`, aprueba el registro del CE con `-replace`, espera hasta 20 min a que `ver-0` esté Online, y crea el Load Balancer + WAF en F5 XC.
+   - **Job 6** (`show_endpoints`): imprime las URLs de acceso finales (CRAPI_DOMAIN + ELBs de AWS) directamente en el log del workflow.

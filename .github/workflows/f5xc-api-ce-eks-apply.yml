@@ -302,6 +302,55 @@ jobs:
       - name: Terraform Apply
         run: terraform apply -auto-approve -input=false
 
+      - name: Configure kubectl
+        run: |
+          CLUSTER_NAME=$(aws eks list-clusters --region "${{ vars.AWS_REGION }}" \
+            --query "clusters[?starts_with(@,'${{ vars.PROJECT_PREFIX }}')]|[0]" \
+            --output text)
+          aws eks update-kubeconfig --region "${{ vars.AWS_REGION }}" --name "$CLUSTER_NAME"
+
+      - name: Wait for crAPI identity service to be ready
+        run: |
+          echo "Waiting for crapi-identity deployment to be ready..."
+          kubectl rollout status deployment/crapi-identity -n crapi --timeout=180s
+
+      - name: Create MCP server admin user in crAPI
+        run: |
+          # The chatbot MCP server needs this user to authenticate with crAPI on startup.
+          # Without it, the MCP server process crashes silently and the chatbot returns
+          # "unhandled errors in a TaskGroup" on every question.
+          ELB=$(kubectl get svc crapi-web -n crapi \
+            -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
+          echo "crAPI ELB: $ELB"
+
+          for i in $(seq 1 10); do
+            HTTP=$(curl -s -o /dev/null -w "%{http_code}" "http://$ELB/identity/health_check" 2>/dev/null)
+            if [ "$HTTP" = "200" ]; then
+              echo "crAPI identity is reachable (HTTP $HTTP)"
+              break
+            fi
+            echo "  Attempt $i/10 — HTTP ${HTTP:-none} — waiting 15s..."
+            sleep 15
+          done
+
+          RESPONSE=$(curl -s -X POST "http://$ELB/identity/api/auth/signup" \
+            -H "Content-Type: application/json" \
+            -d '{"email":"admin@example.com","name":"MCP Admin","number":"5550000000","password":"Admin!123"}')
+          echo "Signup response: $RESPONSE"
+
+          # 200 = created, 403 = already exists — both are acceptable
+          STATUS=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status',''))" 2>/dev/null)
+          if [ "$STATUS" = "200" ] || [ "$STATUS" = "403" ]; then
+            echo "MCP admin user ready (status: $STATUS)"
+          else
+            echo "WARNING: unexpected signup response — $RESPONSE"
+          fi
+
+          # Restart chatbot to ensure MCP server picks up the user on a clean start
+          kubectl rollout restart deployment/crapi-chatbot -n crapi
+          kubectl rollout status deployment/crapi-chatbot -n crapi --timeout=120s
+          echo "Chatbot restarted successfully"
+
   # -------------------------------------------------------
   # Job 4: F5 XC Customer Edge on EKS
   # -------------------------------------------------------
@@ -461,26 +510,45 @@ jobs:
         id: validate
         run: terraform validate -no-color
 
-      - name: Wait for vp-manager to boot and send registration
+      - name: Configure kubectl for CE status polling
         run: |
-          echo "Waiting 3 minutes for vp-manager pod to boot and send registration to F5 XC..."
-          sleep 180
+          CLUSTER_NAME=$(aws eks list-clusters --region "${{ vars.AWS_REGION }}" \
+            --query "clusters[?starts_with(@,'${{ vars.PROJECT_PREFIX }}')]|[0]" \
+            --output text)
+          echo "EKS cluster: $CLUSTER_NAME"
+          aws eks update-kubeconfig --region "${{ vars.AWS_REGION }}" --name "$CLUSTER_NAME"
 
-      - name: Terraform Apply — Approve CE Registration
+      - name: Wait for vp-manager-0 to boot and send registration
         run: |
+          echo "Polling until vp-manager-0 is Running in ves-system (max 10 min)..."
+          for i in $(seq 1 20); do
+            STATUS=$(kubectl get pod vp-manager-0 -n ves-system --no-headers 2>/dev/null | awk '{print $3}')
+            READY=$(kubectl get pod vp-manager-0 -n ves-system --no-headers 2>/dev/null | awk '{print $2}')
+            if [ "$STATUS" = "Running" ] && [ "$READY" = "1/1" ]; then
+              echo "vp-manager-0 is Running — waiting 90s for registration request to reach F5 XC..."
+              sleep 90
+              break
+            fi
+            echo "  Attempt $i/20 — vp-manager-0: ${STATUS:-not found} ${READY:-0/0} — waiting 30s..."
+            sleep 30
+          done
+
+      - name: Approve CE Registration (force replace)
+        run: |
+          # -replace forces Terraform to re-run the approval on every workflow execution,
+          # preventing stale TF state from skipping the approval when the CE re-registers.
           terraform apply -auto-approve -input=false \
+            -replace=volterra_registration_approval.k8s-ce[0] \
             -target=volterra_site_state.site[0] \
             -target=volterra_registration_approval.k8s-ce[0]
 
       - name: Wait for CE to be ONLINE (ver-0 fully Running)
         run: |
-          CLUSTER_NAME=$(aws eks list-clusters --region "${{ vars.AWS_REGION }}" \
-            --query "clusters[?starts_with(@,'${{ vars.PROJECT_PREFIX }}')]|[0]" \
-            --output text)
-          aws eks update-kubeconfig --region "${{ vars.AWS_REGION }}" --name "$CLUSTER_NAME"
-
-          echo "Polling until ver-0 is Running with all containers ready (max 15 min)..."
-          for i in $(seq 1 30); do
+          echo "Polling until ver-0 is Running with all containers ready (max 20 min)..."
+          STATUS=""
+          CURRENT="0"
+          TOTAL="1"
+          for i in $(seq 1 40); do
             READY=$(kubectl get pod ver-0 -n ves-system --no-headers 2>/dev/null | awk '{print $2}')
             STATUS=$(kubectl get pod ver-0 -n ves-system --no-headers 2>/dev/null | awk '{print $3}')
             if [ "$STATUS" = "Running" ] && [ -n "$READY" ]; then
@@ -491,9 +559,15 @@ jobs:
                 break
               fi
             fi
-            echo "  Attempt $i/30 — ver-0: ${STATUS:-pending} ${READY:-0/0} — waiting 30s..."
+            echo "  Attempt $i/40 — ver-0: ${STATUS:-not found} ${READY:-0/0} — waiting 30s..."
             sleep 30
           done
+          if [ "$CURRENT" != "$TOTAL" ]; then
+            echo "ERROR: CE ver-0 never reached Running state after 20 minutes."
+            kubectl get pods -n ves-system
+            kubectl describe pod vp-manager-0 -n ves-system 2>/dev/null | tail -20
+            exit 1
+          fi
 
       - name: Terraform Plan
         id: plan

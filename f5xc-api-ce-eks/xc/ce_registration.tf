@@ -23,11 +23,11 @@ resource "volterra_registration_approval" "k8s-ce" {
   depends_on      = [volterra_site_state.site]
   cluster_name    = var.site_name
   cluster_size    = 1
-  retry           = 5
+  retry           = 20
   wait_time       = 60
   hostname        = "vp-manager-0"
   provisioner "local-exec" {
-  command     = "sleep 30"
+    command = "sleep 30"
   }
 }
 
