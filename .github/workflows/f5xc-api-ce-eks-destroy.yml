@@ -161,8 +161,12 @@ jobs:
           # Si XC_CE_TOKEN era un secret manual, este paso no hace daño (falla silenciosamente).
           TOKEN_NAME="${{ vars.PROJECT_PREFIX }}-ce-token"
           echo "${{ secrets.XC_API_P12_FILE }}" | base64 -d > /tmp/api.p12
+          openssl pkcs12 -legacy -in /tmp/api.p12 -clcerts -nokeys \
+            -passin pass:"${XC_P12_PASSWORD}" -out /tmp/cert.pem 2>/dev/null || \
           openssl pkcs12 -in /tmp/api.p12 -clcerts -nokeys \
             -passin pass:"${XC_P12_PASSWORD}" -out /tmp/cert.pem 2>/dev/null
+          openssl pkcs12 -legacy -in /tmp/api.p12 -nocerts -nodes \
+            -passin pass:"${XC_P12_PASSWORD}" -out /tmp/key.pem 2>/dev/null || \
           openssl pkcs12 -in /tmp/api.p12 -nocerts -nodes \
             -passin pass:"${XC_P12_PASSWORD}" -out /tmp/key.pem 2>/dev/null
           HTTP=$(curl -s -o /dev/null -w "%{http_code}" \
