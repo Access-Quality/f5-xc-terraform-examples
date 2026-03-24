@@ -10,7 +10,7 @@ name: "Seguridad API en RE para EKS con CE"
 #   XC_API_URL              - F5 XC tenant API URL
 #   XC_P12_PASSWORD         - Password for the .p12 certificate
 #   XC_TENANT               - F5 XC tenant name
-#   XC_CE_TOKEN             - F5 XC CE pre-registration token
+#   XC_CE_TOKEN             - F5 XC CE pre-registration token (opcional: si no se configura, el workflow lo crea automáticamente)
 #   OPENAI_API_KEY          - OpenAI API key for the crAPI chatbot (optional)
 #
 # Variables (Settings > Secrets and variables > Actions > Variables):
@@ -367,10 +367,64 @@ jobs:
       TF_VAR_tf_cloud_organization: ${{ secrets.TF_CLOUD_ORGANIZATION }}
       TF_VAR_aws_waf_ce: ${{ vars.TF_CLOUD_WORKSPACE_INFRA }}
       TF_VAR_eks_workspace: ${{ vars.TF_CLOUD_WORKSPACE_EKS }}
+      # F5 XC credentials para crear el site token automáticamente
+      XC_API_URL: ${{ secrets.XC_API_URL }}
+      XC_P12_PASSWORD: ${{ secrets.XC_P12_PASSWORD }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Create F5 XC Site Token
+        run: |
+          # Si XC_CE_TOKEN está configurado como secret, úsalo directamente.
+          # Si no, créalo automáticamente via la API REST de F5 XC con el P12.
+          if [ -n "${{ secrets.XC_CE_TOKEN }}" ]; then
+            echo "Using pre-configured XC_CE_TOKEN secret."
+            echo "XC_CE_TOKEN=${{ secrets.XC_CE_TOKEN }}" >> $GITHUB_ENV
+            exit 0
+          fi
+
+          echo "XC_CE_TOKEN not set — creating site token via F5 XC API..."
+          TOKEN_NAME="${{ vars.PROJECT_PREFIX }}-ce-token"
+
+          # Decodificar P12 y extraer cert + key en PEM
+          echo "${{ secrets.XC_API_P12_FILE }}" | base64 -d > /tmp/api.p12
+          openssl pkcs12 -in /tmp/api.p12 -clcerts -nokeys \
+            -passin pass:"${XC_P12_PASSWORD}" -out /tmp/cert.pem 2>/dev/null
+          openssl pkcs12 -in /tmp/api.p12 -nocerts -nodes \
+            -passin pass:"${XC_P12_PASSWORD}" -out /tmp/key.pem 2>/dev/null
+
+          # Intentar obtener token existente con ese nombre
+          EXISTING=$(curl -sf \
+            --cert /tmp/cert.pem --key /tmp/key.pem \
+            "${XC_API_URL}/register/namespaces/system/tokens/${TOKEN_NAME}" 2>/dev/null || echo "")
+
+          TOKEN_VALUE=$(echo "$EXISTING" | \
+            python3 -c "import sys,json; print(json.load(sys.stdin)['spec']['token'])" 2>/dev/null || echo "")
+
+          # Si no existe, crearlo
+          if [ -z "$TOKEN_VALUE" ]; then
+            echo "Token '${TOKEN_NAME}' not found — creating..."
+            RESPONSE=$(curl -sf \
+              --cert /tmp/cert.pem --key /tmp/key.pem \
+              -X POST "${XC_API_URL}/register/namespaces/system/tokens" \
+              -H "Content-Type: application/json" \
+              -d "{\"metadata\":{\"name\":\"${TOKEN_NAME}\",\"namespace\":\"system\"},\"spec\":{}}" 2>/dev/null)
+            TOKEN_VALUE=$(echo "$RESPONSE" | \
+              python3 -c "import sys,json; print(json.load(sys.stdin)['spec']['token'])" 2>/dev/null || echo "")
+          fi
+
+          rm -f /tmp/api.p12 /tmp/cert.pem /tmp/key.pem
+
+          if [ -z "$TOKEN_VALUE" ]; then
+            echo "ERROR: No se pudo crear ni obtener el site token de F5 XC."
+            echo "Verifica que XC_API_URL, XC_API_P12_FILE y XC_P12_PASSWORD sean correctos."
+            exit 1
+          fi
+
+          echo "Site token '${TOKEN_NAME}' listo."
+          echo "XC_CE_TOKEN=${TOKEN_VALUE}" >> $GITHUB_ENV
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -415,7 +469,7 @@ jobs:
                   MauricePrivateEndpoint: https://register-tls.ves.volterra.io
                   PrivateNIC: eth0
                   SkipStages: ["osSetup", "etcd", "kubelet", "master", "voucher", "workload", "controlWorkload"]
-                  Token: ${{ secrets.XC_CE_TOKEN }}
+                  Token: ${XC_CE_TOKEN}
                   CertifiedHardware: k8s-minikube-voltmesh
               YAML
           }
