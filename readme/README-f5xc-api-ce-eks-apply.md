@@ -315,7 +315,7 @@ Crea o actualiza los cinco workspaces en Terraform Cloud vía la API REST:
     - `SkipStages`: omite fases de SO no aplicables en Kubernetes.
   - El CE arranca como pods de Kubernetes en el namespace `ves-system` y se registra automáticamente con F5 XC usando el token.
 - **Steps especiales:**
-  1. **Create F5 XC Site Token** — si el secret `XC_CE_TOKEN` está configurado, lo usa directamente. Si no, decodifica `XC_API_P12_FILE` con `openssl`, llama a `GET /register/namespaces/system/tokens/${PROJECT_PREFIX}-ce-token` para reutilizar uno existente o `POST` para crear uno nuevo. El valor se exporta como variable de entorno para el step siguiente.
+  1. **Create F5 XC Site Token** — si el secret `XC_CE_TOKEN` está configurado, lo usa directamente. Si no, decodifica `XC_API_P12_FILE` con `openssl pkcs12 -legacy` (necesario en OpenSSL 3.x para los P12 con cifrado RC2-40-CBC de F5 XC), llama a `GET /register/namespaces/system/tokens/${PROJECT_PREFIX}-ce-token` para reutilizar uno existente o `POST` para crear uno nuevo. El UUID del token se extrae de `system_metadata.uid` en la respuesta JSON y se exporta como `XC_CE_TOKEN` para el step siguiente.
   2. Genera `configmap.tf` dinámicamente con los valores obtenidos, seguido de `terraform fmt`.
 
 ### `terraform_xc` — F5 XC API Security
