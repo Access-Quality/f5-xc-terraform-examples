@@ -267,6 +267,7 @@ spec:
       name: etcvpm
     spec:
       accessModes: [ "ReadWriteOnce" ]
+      storageClassName: gp2
       resources:
         requests:
           storage: 1Gi
@@ -274,6 +275,7 @@ spec:
       name: varvpm
     spec:
       accessModes: [ "ReadWriteOnce" ]
+      storageClassName: gp2
       resources:
         requests:
           storage: 1Gi
@@ -281,6 +283,7 @@ spec:
       name: data
     spec:
       accessModes: [ "ReadWriteOnce" ]
+      storageClassName: gp2
       resources:
         requests:
           storage: 1Gi
