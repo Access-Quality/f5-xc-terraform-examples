@@ -66,7 +66,7 @@ resource "aws_eks_node_group" "private-node-group-2-tf" {
   node_group_name = format("%s-private-ng-2-%s", local.project_prefix, local.build_suffix)
   node_role_arn  = aws_iam_role.workernodes.arn
   subnet_ids = var.skip_private_subnet_creation ? [for i in aws_subnet.eks-external: i.id] : [for i in aws_subnet.eks-internal: i.id]
-  ami_type       = "AL2_x86_64"
+  ami_type       = "AL2023_x86_64_STANDARD"
   instance_types = ["t3.xlarge"]
  
   scaling_config {
