@@ -712,12 +712,18 @@ jobs:
             sleep 30
           done
 
-      - name: Approve CE Registration (force replace)
-        continue-on-error: true
+      - name: Approve CE Registration (if needed)
         id: approve_ce
         run: |
-          # -replace forces Terraform to re-run the approval on every workflow execution,
-          # preventing stale TF state from skipping the approval when the CE re-registers.
+          # If ver-0 is already Running, the CE is already ONLINE — skip the
+          # approval entirely so we don't destroy the existing TF state entry.
+          # The -replace approach only makes sense on fresh deploys.
+          VER_STATUS=$(kubectl get pod ver-0 -n ves-system --no-headers 2>/dev/null | awk '{print $3}')
+          if [ "$VER_STATUS" = "Running" ]; then
+            echo "CE already ONLINE (ver-0 Running) — skipping registration approval"
+            exit 0
+          fi
+          echo "CE not yet online — approving registration..."
           terraform apply -auto-approve -input=false \
             -replace=volterra_registration_approval.k8s-ce[0] \
             -target=volterra_site_state.site[0] \
