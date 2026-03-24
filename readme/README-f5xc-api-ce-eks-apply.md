@@ -74,6 +74,7 @@ Internet
 | Registro              | Token auto-creado vía API REST de F5 XC + ConfigMap `vpm-cfg` (el secret `XC_CE_TOKEN` es opcional) |
 | Geolocalización       | `CE_LATITUDE` / `CE_LONGITUDE` configurados como variables del repositorio                       |
 | Endpoint Maurice      | `https://register.ves.volterra.io` / `https://register-tls.ves.volterra.io`                     |
+| StorageClass          | `gp2` se configura como **default** post-creación del cluster EKS — necesario para que PVCs sin `storageClassName` explícito (etcd, ver, etc.) se provisionen automáticamente en EKS 1.33 |
 | Tiempo de espera      | Polling de `vp-manager-0` hasta `1/1 Running` + 90s adicionales antes de aprobar el registro en Job 5 |
 | Módulo Terraform      | `f5xc-api-ce-eks/eks-cluster/ce-deployment`                                                      |
 
@@ -284,10 +285,12 @@ Crea o actualiza los cinco workspaces en Terraform Cloud vía la API REST:
 - **Workspace TFC:** `TF_CLOUD_WORKSPACE_EKS`
 - **Qué crea:**
   - 1 clúster EKS con endpoint público + privado (`public_access_cidrs = 0.0.0.0/0`).
-  - Node group con instancias `t3.xlarge`, disco 30 GB.
+  - Node group con instancias `t3.xlarge`, disco 30 GB, AMI type `AL2023_x86_64_STANDARD` (requerido para EKS 1.33+).
   - IAM roles para el cluster y los worker nodes con las políticas necesarias (`AmazonEKSWorkerNodePolicy`, `AmazonEKS_CNI_Policy`, `AmazonEC2ContainerRegistryReadOnly`).
   - Addons EKS definidos en `var.eks_addons`.
-- **Step especial:** deriva la clave pública SSH de la privada con `ssh-keygen -y`.
+- **Steps especiales:**
+  1. Deriva la clave pública SSH de la privada con `ssh-keygen -y`.
+  2. **Set gp2 as default StorageClass** — tras el apply, hace `kubectl patch storageclass gp2` para marcarlo como default. En EKS 1.33, ningún StorageClass es default por defecto, lo que causa que PVCs sin `storageClassName` explícito (incluidos los que crea `vp-manager` dinámicamente para `etcd` y `ver`) queden en estado `Pending` indefinidamente.
 
 ### `terraform_crapi` — crAPI App (Helm)
 
@@ -329,8 +332,8 @@ Crea o actualiza los cinco workspaces en Terraform Cloud vía la API REST:
 - **Flujo de steps especiales:**
   1. **Configure kubectl** — conecta al cluster EKS descubriéndolo por prefijo con `aws eks list-clusters`.
   2. **Wait for vp-manager-0** — pollea hasta que `vp-manager-0` esté `1/1 Running` (máx. 10 min), luego espera 90s adicionales para que la registration llegue a F5 XC. Reemplaza el anterior `sleep 180` fijo que fallaba cuando el arranque era más lento o más rápido que ese tiempo.
-  3. **Approve CE Registration (force replace)** — ejecuta `terraform apply -replace=volterra_registration_approval.k8s-ce[0]` con `-target`. El flag `-replace` es crítico: fuerza a Terraform a re-ejecutar el approval en cada workflow run, incluso cuando el recurso ya existe en el estado de Terraform Cloud. Sin él, en re-ejecuciones el CE nuevo queda en `PENDING` indefinidamente porque Terraform cree que ya fue aprobado.
-  4. **Wait for CE to be ONLINE** — pollea hasta que `ver-0` esté `Running` con todos los containers listos (máx. 20 min, 40 intentos cada 30s). Falla con `exit 1` y muestra diagnóstico si el CE no llega a Online.
+  3. **Approve CE Registration (if needed)** — verifica si `ver-0` ya está `Running` antes de tocar el estado de Terraform. Si el CE ya está ONLINE (re-run o cluster preexistente), salta el approval para no destruir el entry de TF state. Si el CE no está online aún, ejecuta `terraform apply -replace=volterra_registration_approval.k8s-ce[0]` con `-target` para forzar la aprobación del registro pendiente.
+  4. **Wait for CE to be ONLINE** — pollea hasta que `ver-0` esté `Running` con todos los containers listos (máx. 30 min, 60 intentos cada 30s), mostrando diagnóstico de pods y PVCs cada 3 minutos. Falla con `exit 1` si el CE no llega a Online. `ver-0` es el pod de plano de datos que `vp-manager` crea dinámicamente tras recibir la configuración de F5 XC; su presencia confirma que el CE está completamente operativo.
   5. `terraform plan` + `terraform apply -auto-approve` completo — crea el Load Balancer, WAF y Origin Pool una vez el CE está ONLINE.
 - **Parámetros fijos en el job:**
 
@@ -343,6 +346,11 @@ Crea o actualiza los cinco workspaces en Terraform Cloud vía la API REST:
   | `TF_VAR_site_name`      | `PROJECT_PREFIX`   | Nombre del CE Site registrado en F5 XC                             |
   | `TF_VAR_user_site`      | `"true"`           | El site es del tenant del usuario (no `ves-io`)                    |
   | `TF_VAR_http_only`      | `"true"`           | HTTP puerto 80 (sin HTTPS, sin auto-cert, sin delegación DNS)      |
+  | `TF_VAR_xc_api_pro`    | `"true"`           | Habilita `volterra_api_definition` y asocia la spec OpenAPI al LB  |
+
+- **Upload de swagger spec:** antes del `terraform init`, el workflow descarga la spec OpenAPI de crAPI desde el repositorio OWASP, limpia las claves vacías que F5 XC rechaza (`"Empty string keys not allowed"`), y la sube al object store de F5 XC vía `PUT /api/object_store/namespaces/{ns}/stored_objects/swagger/{name}` usando autenticación con el P12. La URL versionada resultante (`metadata.url`) se exporta como `TF_VAR_xc_api_spec` para que `volterra_api_definition` la referencie.
+
+- **Importante — campo `tenant` en referencias internas:** el bloque `api_definition` del HTTP Load Balancer **no debe incluir el campo `tenant`**. F5 XC interpreta `tenant` como una referencia cross-tenant y devuelve `Cannot refer to tenant` (HTTP 400). Las referencias entre objetos del mismo tenant siempre deben omitir ese campo.
 
 - **Backend TFC:** el P12 se decodifica de base64 directamente a `api.p12` en el step de backend:
   ```bash
