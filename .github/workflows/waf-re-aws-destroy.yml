@@ -1,4 +1,4 @@
-name: "F5XC WAF on RE AWS Destroy"
+name: "WAF en RE para VM en AWS - Destroy"
 
 # IMPORTANT: The three Terraform Cloud workspaces used by this workflow
 # (INFRA, VM, XC) must be configured with execution mode "Local" so that
@@ -97,6 +97,18 @@ jobs:
       - name: Terraform Destroy
         if: (github.ref == 'refs/heads/destroy-waf-re-aws' && github.event_name == 'push') || github.event_name == 'workflow_dispatch'
         run: terraform destroy -auto-approve -input=false
+
+      - name: Delete XC Namespace
+        if: (github.ref == 'refs/heads/destroy-waf-re-aws' && github.event_name == 'push') || github.event_name == 'workflow_dispatch'
+        run: |
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
+            "${{ secrets.XC_API_URL }}/web/namespaces/${{ vars.XC_NAMESPACE }}" \
+            --cert-type P12 --cert api.p12:${{ secrets.XC_P12_PASSWORD }})
+          if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "404" ]; then
+            echo "Error deleting namespace: HTTP $HTTP_STATUS"
+            exit 1
+          fi
+          echo "Namespace deleted (HTTP $HTTP_STATUS)"
 
   terraform_vm:
     name: "AWS VM (Arcadia)"
