@@ -1,4 +1,4 @@
-name: "F5 XC WAF on CE AWS Deploy"
+name: "WAF on CE AWS - Deploy"
 # Deploys resources in order: AWS Infra → EKS Cluster → Boutique App → F5XC WAF.
 # TFC workspaces are created automatically by the setup_tfc_workspaces job via
 # the Terraform Cloud API. Each workspace is configured with Execution Mode

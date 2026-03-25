@@ -1,4 +1,4 @@
-name: "F5 XC WAF on CE AWS Destroy"
+name: "WAF on CE AWS - Destroy"
 
 on:
   workflow_dispatch:
