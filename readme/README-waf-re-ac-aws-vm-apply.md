@@ -53,13 +53,29 @@ Internet
 └─────────────────────────────────────────────────────────┘
 ```
 
-### Casos de uso típicos
+### Casos de Uso para Laboratorio
 
 1. Demostración de WAF en RE con AppConnect para aplicaciones en subredes privadas de AWS.
 2. Laboratorio de protección de apps en EC2 privado — sin necesidad de exponer IPs públicas ni instalar agentes en la VM.
 3. Validación de políticas WAF de F5 XC (bloqueo de SQLi, XSS, ataques OWASP Top 10) con conectividad AppConnect.
 4. Entorno de pruebas efímero para workshops y capacitaciones de F5 Distributed Cloud (RE + AppConnect + CE en AWS).
 5. Comparación de modelos de publicación: RE con IP pública (caso 4) vs. RE + CE AppConnect en AWS (caso 5).
+
+### Casos de Uso Reales
+
+1. **Protección de aplicaciones internas sin exposición directa a internet.** El patrón más común en producción: aplicaciones en subredes privadas de AWS (sin Elastic IP, sin ALB público) que necesitan ser consumidas desde internet de forma segura. El CE en AppConnect mode actúa como proxy hacia la subred privada — la aplicación nunca ve tráfico de internet directamente. Aplica a ERPs, CRMs, portales internos y paneles de administración.
+
+2. **Migración de WAF on-prem a nube sin mover la aplicación.** Organizaciones con aplicaciones legacy en EC2 (o en data centers conectados vía VPN/Direct Connect) que quieren añadir una capa WAF sin rediseñar la red ni instalar agentes en la VM. El CE se despliega en una subred accesible, establece el túnel con el RE de F5 XC, y la VM sigue en su subred privada sin modificaciones.
+
+3. **WAF centralizado para cargas de trabajo en múltiples VPCs o cuentas AWS.** Empresas con aplicaciones distribuidas en múltiples VPCs o cuentas AWS que quieren un único punto de inspección WAF. El RE global de F5 XC actúa como WAF centralizado para múltiples CEs (uno por VPC/cuenta), sin necesidad de replicar políticas en cada entorno independiente.
+
+4. **Publicación segura de herramientas internas de desarrollo y operaciones.** Jenkins, Grafana, SonarQube, Portainer — herramientas que necesitan ser accesibles desde internet para equipos remotos pero que nunca deben exponerse con IP pública. El CE + RE de F5 XC resuelve este caso sin requerir VPN por usuario ni abrir puertos en los Security Groups.
+
+5. **Cumplimiento de requisitos de segmentación de red (PCI-DSS, HIPAA, ISO 27001).** Marcos regulatorios que exigen que los sistemas de procesamiento de datos sensibles no tengan conexión directa a internet. La arquitectura RE + CE AppConnect cumple el requisito: la subred privada de la VM nunca tiene ruta directa al exterior, y todo el tráfico pasa por el plano de control de F5 XC con log de auditoría completo.
+
+6. **WAF para aplicaciones en instancias spot o efímeras sin IP fija.** Aplicaciones en EC2 Spot Instances o entornos con IPs privadas que cambian frecuentemente. El Origin Pool de F5 XC se actualiza dinámicamente vía Terraform y la IP pública de la app nunca existe — elimina la complejidad de gestionar certificados y DNS asociados a IPs cambiantes.
+
+7. **Sandbox de Red Team / Blue Team con WAF activo en entorno controlado.** Equipos de seguridad que necesitan un entorno con vulnerabilidades conocidas (DVWA) pero con WAF real bloqueando técnicas automáticas, sin exponer el entorno al internet abierto. Valida en condiciones reales que las defensas funcionan antes de activarlas en producción.
 
 ### Componentes desplegados
 
