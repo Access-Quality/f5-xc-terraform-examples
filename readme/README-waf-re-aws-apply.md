@@ -1,4 +1,4 @@
-# WAF on RE AWS — Apply
+# WAF en RE para VM en AWS - Deploy
 
 Este workflow despliega una solución de **Web Application Firewall (WAF) con F5 Distributed Cloud sobre el Regional Edge (RE)**, protegiendo la aplicación **Arcadia Finance** que corre en una instancia EC2 dentro de un VPC en AWS. El tráfico de internet pasa por el RE global de F5 XC antes de ser reenviado a la aplicación.
 
@@ -48,12 +48,25 @@ Internet
 └─────────────────────────────────────────────────────────┘
 ```
 
-### Casos de uso típicos
+### Casos de Uso para Laboratorio
 
 1. Demostración de WAF en RE sin necesidad de instalar un Customer Edge en la nube del cliente.
 2. Laboratorio de protección de aplicaciones en EC2 con F5 XC WAF.
 3. Validación de políticas WAF de F5 XC (bloqueo de SQLi, XSS, ataques OWASP Top 10).
 4. Entorno de pruebas efímero para workshops y capacitaciones de F5 Distributed Cloud.
+5. Comparación de modelos de publicación: RE con IP pública (este caso) vs. RE + CE AppConnect sin IP pública (caso AppConnect).
+
+### Casos de Uso Reales
+
+1. **Protección de aplicaciones web expuestas a internet con IP pública en AWS.** El patrón más simple para añadir WAF a una aplicación en EC2 con Elastic IP: el RE de F5 XC actúa como proxy inverso global, inspecciona el tráfico y reenvía solo peticiones limpias al origen. No requiere cambios en la infraestructura de la aplicación.
+
+2. **Migración de WAF on-prem o WAF de nube a F5 Distributed Cloud.** Organizaciones con aplicaciones en EC2 que usan WAF de AWS (WAF nativo), ModSecurity u otra solución, y quieren centralizar la gestión de políticas WAF en F5 XC sin mover la aplicación ni modificar la red.
+
+3. **WAF en RE como primera línea de defensa antes del ALB o API Gateway.** Empresas que tienen un Application Load Balancer o API Gateway en AWS y quieren añadir una capa WAF global antes del balanceador. El RE de F5 XC absorbe el tráfico malicioso antes de que llegue a la infraestructura de AWS.
+
+4. **Protección de aplicaciones legacy sin soporte para certificados TLS modernos.** Aplicaciones en EC2 que no soportan TLS 1.3 o certificados modernos. El RE de F5 XC termina TLS hacia el cliente y reenvía al origen en HTTP plano o TLS legacy — desacoplando el perfil TLS de la app del perfil expuesto al cliente.
+
+5. **Demo de WAF para clientes y prospects de F5.** Entorno efímero que se despliega en minutos con Terraform, demuestra bloqueo de ataques OWASP Top 10 en tiempo real, y se destruye completamente al finalizar — sin costes residuales ni configuración manual.
 
 ### Componentes desplegados
 
@@ -82,15 +95,9 @@ aws/waf-re-aws/xc     ──►  XC Namespace + Origin Pool + HTTP LB + WAF Poli
 
 ```yaml
 on:
-  push:
-    branches:
-      - deploy-waf-re-aws
-  pull_request:
   workflow_dispatch:
 ```
 
-- **Push a `deploy-waf-re-aws`:** ejecuta el apply completo automáticamente.
-- **Pull Request:** ejecuta `terraform plan` y publica el resultado como comentario en el PR.
 - **`workflow_dispatch`:** ejecución manual desde la pestaña **Actions** de GitHub.
 
 ---
@@ -259,6 +266,15 @@ flowchart LR
 - **Plan fallido en `terraform_xc` por estado remoto vacío:**
   El job `terraform_xc` depende de los outputs de `terraform_infra` y `terraform_vm`. Si alguno de los dos workspaces previos no tiene estado, `terraform_xc` fallará. Re-ejecutar el workflow completo.
 
+- **Error 409 al crear el namespace en re-ejecuciones:**
+  El step _"Create XC Namespace if not exists"_ usa `curl` para pre-crear el namespace antes del `terraform apply`. Si el namespace ya existe, el API responde 409 — este código se acepta como éxito y el workflow continúa sin error. Terraform ya no gestiona el recurso `volterra_namespace`.
+
+- **El step `Remove namespace from TF state` muestra "Invalid target address":**
+  En la primera ejecución limpia, `volterra_namespace.this` no existe en el estado de TFC y `terraform state rm` finaliza con código 1. El `|| true` absorbe el error — comportamiento esperado, puede ignorarse.
+
+- **Variable `ARCADIA_DOMAIN` no configurada:**
+  Debe existir como variable de repositorio en GitHub → **Settings → Secrets and variables → Variables**. Ejemplo: `arcadia-aws.example.com`. Si no está definida, el step de Terraform fallará con variable vacía.
+
 - **WAF en modo detección (no bloquea ataques):**
   Verificar que `XC_WAF_BLOCKING` esté en `true`. Si está en `false`, la WAF policy registra pero no bloquea.
 
@@ -266,8 +282,10 @@ flowchart LR
 
 ## Ejecución manual
 
+**Archivo de workflow:** `.github/workflows/waf-re-aws-apply.yml`
+
 1. Ir a **Actions** en GitHub.
-2. Seleccionar el workflow: **F5XC WAF on RE AWS Deploy**.
+2. Seleccionar el workflow: **WAF en RE para VM en AWS - Deploy**.
 3. Hacer clic en **Run workflow**.
 4. Confirmar la ejecución. No hay inputs adicionales.
 
@@ -280,11 +298,63 @@ flowchart LR
 
 ---
 
+## Uso de la aplicación Arcadia Finance
+
+### Acceso inicial
+
+Navegar a `http://<ARCADIA_DOMAIN>/` en el navegador. La aplicación Arcadia Finance estará disponible directamente — no requiere inicialización manual.
+
+### Credenciales por defecto
+
+| Usuario         | Contraseña  |
+| --------------- | ----------- |
+| `admin`         | `iloveblue` |
+| `matt`          | `ilovef5`   |
+| `jim`           | `ilovef5`   |
+| `anna`          | `ilovef5`   |
+
+### Módulos y endpoints disponibles
+
+Arcadia Finance expone una API REST y una interfaz web con los siguientes endpoints:
+
+| Endpoint                        | Descripción                                      |
+| ------------------------------- | ------------------------------------------------ |
+| `/`                             | Página principal (login)                         |
+| `/trading/`                     | Panel de trading de acciones                     |
+| `/api/rest/execute_transaction/`| API para transacciones (JSON POST)               |
+| `/api/rest/get_balance/`        | API para consultar saldo                         |
+| `/api/rest/get_stock_value/`    | API para consultar precio de acciones            |
+| `/api/rest/login/`              | API de autenticación                             |
+
+### Verificación del WAF
+
+Con `XC_WAF_BLOCKING=true`, los ataques son bloqueados antes de llegar a la aplicación. Ejemplos de prueba:
+
+```bash
+# SQLi en parámetro de URL — debe ser bloqueado
+curl -i "http://<ARCADIA_DOMAIN>/api/rest/get_stock_value/?stock=' OR '1'='1"
+
+# XSS reflejado — debe ser bloqueado
+curl -i "http://<ARCADIA_DOMAIN>/?q=<script>alert(1)</script>"
+
+# Command injection — debe ser bloqueado
+curl -i "http://<ARCADIA_DOMAIN>/api/rest/get_balance/?user=admin;id"
+
+# Petición legítima — debe pasar
+curl -i "http://<ARCADIA_DOMAIN>/api/rest/get_stock_value/?stock=AAPL"
+```
+
+Los eventos de bloqueo quedan registrados en F5 XC → **Security → Security Events** del namespace configurado en `XC_NAMESPACE`.
+
+---
+
 ## Destroy del laboratorio
 
-El archivo `.github/workflows/waf-re-aws-destroy.yml` destruye **todos** los recursos creados por el apply en orden inverso para evitar dependencias huérfanas en F5 XC y AWS.
+El archivo [`.github/workflows/waf-re-aws-destroy.yml`](../.github/workflows/waf-re-aws-destroy.yml) destruye **todos** los recursos creados por el apply en orden inverso para evitar dependencias huérfanas en F5 XC y AWS.
 
 **Trigger:** `workflow_dispatch` — ejecución manual desde GitHub Actions.
+
+> **Nota:** el namespace de F5 XC (`XC_NAMESPACE`) también es eliminado via `curl DELETE` al finalizar el destroy de `terraform_xc`, antes de proceder con los recursos de AWS.
 
 ### Orden de destrucción
 
