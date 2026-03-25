@@ -167,7 +167,7 @@ Configurar en **Settings → Secrets and variables → Variables**:
 
 | Variable           | Ejemplo                          | Descripción                                                 |
 | ------------------ | -------------------------------- | ----------------------------------------------------------- |
-| `XC_NAMESPACE`     | `arcadia-prod`                   | Namespace de F5 XC donde se crea el LB y WAF               |
+| `XC_NAMESPACE`     | `dvwa-prod`                      | Namespace de F5 XC donde se crea el LB y WAF               |
 | `DVWA_DOMAIN`      | `dvwa.example.com`               | FQDN de la aplicación en el HTTP LB de F5 XC               |
 
 ---
@@ -240,8 +240,8 @@ flowchart LR
 
     subgraph EC2[EC2 Instance — Amazon Linux 2]
       PRIV_IP[IP privada]
-      ARCADIA[Arcadia Finance\nDocker Compose]
-      PRIV_IP --> ARCADIA
+      DVWA[DVWA\nDocker Compose]
+      PRIV_IP --> DVWA
     end
 
     CE -->|IP privada| PRIV_IP
@@ -266,9 +266,7 @@ flowchart LR
 - **CE site no aparece como `ONLINE` en XC:**
   Los CE sites pueden tardar **15-20 minutos** en registrarse y aparecer en línea. Verificar el estado en la consola de F5 XC → **Infrastructure → Sites**.
 
-- **Arcadia Finance no responde desde el Origin Pool:**
-  La app corre via `userdata.sh` al lanzar la EC2. Puede tardar 2-3 minutos. Verificar con:
-
+- **DVWA no responde desde el Origin Pool:**
   La app DVWA corre via `dvwa_userdata.sh` al lanzar la EC2. Puede tardar 2-3 minutos. Verificar con:
 
   ```bash
