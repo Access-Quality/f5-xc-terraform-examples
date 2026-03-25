@@ -244,7 +244,7 @@ Configurar en **Settings → Secrets and variables → Variables**:
 | Variable       | Ejemplo                | Descripción                                  |
 | -------------- | ---------------------- | -------------------------------------------- |
 | `XC_NAMESPACE` | `boutique-prod`        | Namespace de F5 XC donde se crea el LB y WAF |
-| `APP_DOMAIN`   | `boutique.example.com` | FQDN de la aplicación en el HTTP LB de F5 XC |
+| `BOUTIQUE_DOMAIN`   | `boutique.example.com` | FQDN de la aplicación en el HTTP LB de F5 XC |
 
 ---
 
@@ -420,7 +420,7 @@ El módulo `azure/aks-cluster` referencia este RG directamente en el peering `pe
 - Los cuatro jobs terminan en estado `success`.
 - El namespace indicado en `XC_NAMESPACE` existe en la consola de F5 XC.
 - El HTTP Load Balancer aparece publicado en el Azure CE Site.
-- La aplicación Online Boutique es accesible desde internet a través del dominio configurado en `APP_DOMAIN`.
+- La aplicación Online Boutique es accesible desde internet a través del dominio configurado en `BOUTIQUE_DOMAIN`.
 
 ---
 
@@ -439,7 +439,7 @@ En la consola de F5 XC (`https://<tenant>.console.ves.volterra.io`):
 
 ### 2. Resolver el dominio (si no hay delegación DNS)
 
-El HTTP LB de F5 XC está configurado con el dominio `APP_DOMAIN` pero **no usa delegación DNS** (`xc_delegation = false`). Para poder acceder desde el navegador o curl es necesario resolver el dominio manualmente.
+El HTTP LB de F5 XC está configurado con el dominio `BOUTIQUE_DOMAIN` pero **no usa delegación DNS** (`xc_delegation = false`). Para poder acceder desde el navegador o curl es necesario resolver el dominio manualmente.
 
 **Obtener la IP pública del CE:**
 
@@ -456,7 +456,7 @@ sudo nano /etc/hosts
 Añadir al final:
 
 ```
-<IP_PUBLICA_CE>   <APP_DOMAIN>
+<IP_PUBLICA_CE>   <BOUTIQUE_DOMAIN>
 ```
 
 Por ejemplo:
@@ -468,13 +468,13 @@ Por ejemplo:
 ### 3. Acceder a la aplicación
 
 ```bash
-curl -v http://<APP_DOMAIN>/
+curl -v http://<BOUTIQUE_DOMAIN>/
 ```
 
 La respuesta debe ser HTTP 200 con el HTML de Online Boutique (Google microservices-demo). También se puede abrir en el navegador:
 
 ```
-http://<APP_DOMAIN>/
+http://<BOUTIQUE_DOMAIN>/
 ```
 
 ### 4. Verificar la WAF (modo monitoring)
@@ -483,13 +483,13 @@ Enviar un request con payload malicioso. En modo monitoring el request **pasa**,
 
 ```bash
 # XSS en query string
-curl -v "http://<APP_DOMAIN>/?x=<script>alert(1)</script>"
+curl -v "http://<BOUTIQUE_DOMAIN>/?x=<script>alert(1)</script>"
 
 # SQL injection básica
-curl -v "http://<APP_DOMAIN>/?id=1'+OR+'1'='1"
+curl -v "http://<BOUTIQUE_DOMAIN>/?id=1'+OR+'1'='1"
 
 # Path traversal
-curl -v "http://<APP_DOMAIN>/../../etc/passwd"
+curl -v "http://<BOUTIQUE_DOMAIN>/../../etc/passwd"
 ```
 
 **Verificar los eventos en F5 XC:**

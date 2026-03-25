@@ -1,4 +1,4 @@
-name: "F5XC WAF on AZ CE Deploy"
+name: "WAF en CE AZ - Deploy"
 # Deploys WAF on Customer Edge (CE) in Azure using F5 Distributed Cloud + AKS.
 # Traffic enters the CE (Ingress Gateway mode) over HTTP :80, is inspected by the
 # WAF policy (monitoring mode), and forwarded to Online Boutique running in AKS
@@ -56,7 +56,7 @@ name: "F5XC WAF on AZ CE Deploy"
 #   AZURE_REGION                      - Azure region (e.g. eastus)
 #   PROJECT_PREFIX                    - Prefix for all resource names
 #   XC_NAMESPACE                      - F5 XC namespace for the HTTP LB and WAF policy
-#   APP_DOMAIN                        - App FQDN for the HTTP Load Balancer
+#   BOUTIQUE_DOMAIN                    - App FQDN for the HTTP Load Balancer
 
 on:
   workflow_dispatch:
@@ -281,7 +281,7 @@ jobs:
       TF_VAR_xc_tenant: ${{ secrets.XC_TENANT }}
       TF_VAR_api_url: ${{ secrets.XC_API_URL }}
       TF_VAR_xc_namespace: ${{ vars.XC_NAMESPACE }}
-      TF_VAR_app_domain: ${{ vars.APP_DOMAIN }}
+      TF_VAR_app_domain: ${{ vars.BOUTIQUE_DOMAIN }}
       TF_VAR_az_ce_site: "true"
       TF_VAR_azure_xc_machine_type: "Standard_D4s_v4"
       TF_VAR_advertise_sites: "true"
