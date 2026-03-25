@@ -153,7 +153,7 @@ Configurar en **Settings → Secrets and variables → Variables**:
 | Variable           | Ejemplo                        | Descripción                                          |
 | ------------------ | ------------------------------ | ---------------------------------------------------- |
 | `XC_NAMESPACE`     | `arcadia-prod`                 | Namespace de F5 XC donde se crea el LB y WAF         |
-| `APP_DOMAIN`       | `arcadia-aws.example.com`      | FQDN de la aplicación en el HTTP LB de F5 XC         |
+| `ARCADIA_DOMAIN`   | `arcadia-aws.example.com`      | FQDN de la aplicación en el HTTP LB de F5 XC         |
 | `XC_WAF_BLOCKING`  | `true`                         | `true` = modo bloqueo; `false` = modo detección      |
 
 ---
@@ -276,7 +276,7 @@ flowchart LR
 - Los tres jobs (`terraform_infra`, `terraform_vm`, `terraform_xc`) terminan en estado `success`.
 - El namespace indicado en `XC_NAMESPACE` existe en la consola de F5 XC.
 - El HTTP Load Balancer aparece publicado con una VIP pública en el Regional Edge.
-- La aplicación Arcadia Finance es accesible desde internet a través del dominio configurado en `APP_DOMAIN`.
+- La aplicación Arcadia Finance es accesible desde internet a través del dominio configurado en `ARCADIA_DOMAIN`.
 
 ---
 
