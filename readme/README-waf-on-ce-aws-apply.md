@@ -4,6 +4,9 @@ Este workflow despliega una solución de **Web Application Firewall (WAF) con F5
 
 ---
 
+![alt text](image.png)
+
+
 ## Resumen de arquitectura y caso de uso
 
 ### ¿Para qué sirve este laboratorio?
