@@ -244,10 +244,10 @@ Configurar en **Settings → Secrets and variables → Variables**:
 
 ### Aplicación
 
-| Variable       | Ejemplo                | Descripción                                   |
-| -------------- | ---------------------- | --------------------------------------------- |
-| `XC_NAMESPACE` | `boutique-prod`        | Namespace de F5 XC donde se crea el LB y WAF  |
-| `APP_DOMAIN`   | `boutique.example.com` | FQDN de la aplicación en el HTTP LB de F5 XC  |
+| Variable          | Ejemplo                | Descripción                                   |
+| ----------------- | ---------------------- | --------------------------------------------- |
+| `XC_NAMESPACE`    | `boutique-prod`        | Namespace de F5 XC donde se crea el LB y WAF  |
+| `BOUTIQUE_DOMAIN` | `boutique.example.com` | FQDN de la aplicación en el HTTP LB de F5 XC  |
 
 ---
 
