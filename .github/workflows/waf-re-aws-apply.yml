@@ -222,6 +222,19 @@ jobs:
           EOF
           echo "${{ secrets.XC_API_P12_FILE }}" | base64 -d > api.p12
 
+      - name: Create XC Namespace if not exists
+        run: |
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+            "${{ secrets.XC_API_URL }}/web/namespaces" \
+            --cert-type P12 --cert api.p12:${{ secrets.XC_P12_PASSWORD }} \
+            -H "Content-Type: application/json" \
+            -d '{"metadata":{"name":"${{ vars.XC_NAMESPACE }}","namespace":""},"spec":{}}')
+          if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "409" ]; then
+            echo "Error creating namespace: HTTP $HTTP_STATUS"
+            exit 1
+          fi
+          echo "Namespace ready (HTTP $HTTP_STATUS)"
+
       - name: Terraform Init
         id: init
         run: terraform init
@@ -229,6 +242,9 @@ jobs:
       - name: Terraform Validate
         id: validate
         run: terraform validate -no-color
+
+      - name: Remove namespace from TF state if present
+        run: terraform state rm volterra_namespace.this 2>/dev/null || true
 
       - name: Terraform Plan
         id: plan

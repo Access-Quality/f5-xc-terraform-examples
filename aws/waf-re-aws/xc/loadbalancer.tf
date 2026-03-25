@@ -1,5 +1,5 @@
 resource "volterra_origin_pool" "op" {
-  depends_on  = [volterra_namespace.this]
+  depends_on  = [null_resource.namespace_ready]
   name        = format("%s-xcop-%s", local.project_prefix, local.build_suffix)
   namespace   = var.xc_namespace
   description = format("Origin pool pointing to Arcadia at %s:%s", local.origin_ip, local.origin_port)
