@@ -279,6 +279,18 @@ flowchart LR
 - **Plan fallido en `terraform_xc` por estado remoto vacío:**
   El job `terraform_xc` depende de los outputs de los dos jobs anteriores. Si alguno no tiene estado, re-ejecutar el workflow completo.
 
+- **HTTP 503 en `DVWA_DOMAIN` justo después del apply:**
+  El CE site requiere entre **10 y 15 minutos adicionales** para arrancar la EC2, registrarse con F5 XC y descargar la configuración. Verificar el estado en la consola de F5 XC → **Infrastructure → Sites**. Mientras el site aparezca como `Provisioning`, cualquier petición al LB devolverá 503. Esperar hasta que muestre `ONLINE` antes de probar el dominio.
+
+- **Error 409 al crear el namespace en re-ejecuciones:**
+  El step _"Create XC Namespace if not exists"_ usa `curl` para pre-crear el namespace `democasos` antes del `terraform apply`. Si el namespace ya existe, el API responde 409 — este código se acepta como éxito y el workflow continúa sin error. Terraform ya no gestiona el recurso `volterra_namespace`, por lo que no fallará por conflicto de estado.
+
+- **El step `Remove namespace from TF state` muestra "Invalid target address":**
+  En la primera ejecución limpia, el recurso `volterra_namespace.this` no existe en el estado de TFC, y `terraform state rm` finaliza con código 1. Esto es comportamiento esperado; el `|| true` absorbe el error y el workflow continúa normalmente. Puede ignorarse de forma segura.
+
+- **Variable `DVWA_DOMAIN` no configurada:**
+  Debe existir como variable de repositorio en GitHub → **Settings → Secrets and variables → Variables**. Valor de ejemplo: `dvwa.digitalvs.com`. Si no está definida, el step de Terraform fallará con variable vacía.
+
 ---
 
 ## Ejecución manual
