@@ -311,6 +311,78 @@ flowchart LR
 
 ---
 
+## Uso de la aplicación DVWA
+
+### Acceso inicial
+
+1. Abrir el navegador y navegar a `http://<DVWA_DOMAIN>/setup.php`.
+2. Hacer clic en **Create / Reset Database** para inicializar la base de datos con los usuarios y datos de prueba por defecto.
+3. Tras la inicialización, la página redirige automáticamente al login.
+
+### Credenciales por defecto
+
+| Usuario  | Contraseña |
+| -------- | ---------- |
+| `admin`  | `password` |
+| `gordonb`| `abc123`   |
+| `1337`   | `charley`  |
+| `pablo`  | `letmein`  |
+| `smithy` | `password` |
+
+### Configuración del nivel de seguridad
+
+Después de hacer login, ir a **DVWA Security** en el menú lateral y seleccionar el nivel:
+
+| Nivel       | Descripción                                                                                          |
+| ----------- | ---------------------------------------------------------------------------------------------------- |
+| `Low`       | Sin protección en la app — ideal para generar ataques y validar que el WAF de F5 XC los bloquea.    |
+| `Medium`    | Protección parcial en la app — útil para comparar detección WAF vs. filtros de la propia app.       |
+| `High`      | Protección casi completa en la app — foco en técnicas avanzadas de bypass.                          |
+| `Impossible`| App completamente protegida — referencia de código seguro.                                           |
+
+> Para este laboratorio se recomienda usar **`Low`** para que el WAF de F5 XC actúe como única línea de defensa.
+
+### Módulos disponibles
+
+| Módulo                   | Tipo de ataque                       | Cómo probar con el WAF                                           |
+| ------------------------ | ------------------------------------ | ---------------------------------------------------------------- |
+| **SQL Injection**        | SQLi clásico                         | Ingresar `' OR '1'='1` en el campo `User ID`                    |
+| **SQL Injection (Blind)**| SQLi ciego (boolean/time-based)      | Ingresar `1' AND SLEEP(5)#`                                      |
+| **XSS (Reflected)**      | Cross-Site Scripting reflejado       | Ingresar `<script>alert('xss')</script>` en el campo de nombre  |
+| **XSS (Stored)**         | XSS persistente                      | Publicar un comentario con `<script>alert(1)</script>`           |
+| **Command Injection**    | Inyección de comandos OS             | Ingresar `127.0.0.1; id` en el campo de IP                      |
+| **File Inclusion**       | LFI/RFI                              | Modificar el parámetro `page=` con rutas del sistema            |
+| **File Upload**          | Subida de archivos maliciosos        | Intentar subir un `.php` o `.php.jpg`                            |
+| **CSRF**                 | Cross-Site Request Forgery           | Usar el formulario de cambio de contraseña                       |
+| **Brute Force**          | Fuerza bruta en login                | Probar combinaciones de usuario/contraseña por formulario        |
+
+### Verificación del WAF
+
+Con la WAF policy de F5 XC en **modo blocking**, los ataques deben ser **bloqueados** y el cliente recibe una respuesta de bloqueo (por defecto HTTP 200 con página de bloqueo de F5 XC, o configurable a 403).
+
+Ejemplo de prueba rápida con `curl`:
+
+```bash
+# SQLi — debe ser bloqueado por el WAF
+curl -i "http://<DVWA_DOMAIN>/vulnerabilities/sqli/?id=' OR '1'='1&Submit=Submit" \
+  -b "PHPSESSID=<session_id>; security=low"
+
+# XSS reflejado — debe ser bloqueado por el WAF
+curl -i "http://<DVWA_DOMAIN>/vulnerabilities/xss_r/?name=<script>alert(1)</script>" \
+  -b "PHPSESSID=<session_id>; security=low"
+
+# Command Injection — debe ser bloqueado por el WAF
+curl -i "http://<DVWA_DOMAIN>/vulnerabilities/exec/" \
+  --data "ip=127.0.0.1;id&Submit=Submit" \
+  -b "PHPSESSID=<session_id>; security=low"
+```
+
+Para obtener el `PHPSESSID`, hacer login en DVWA desde el navegador y copiar la cookie desde las herramientas de desarrollador (F12 → Application → Cookies).
+
+Los eventos de bloqueo quedan registrados en F5 XC → **Security → Security Events** del namespace correspondiente.
+
+---
+
 ## Destroy del laboratorio
 
 El archivo [`.github/workflows/waf-re-ac-aws-vm-destroy.yml`](../.github/workflows/waf-re-ac-aws-vm-destroy.yml) destruye **todos** los recursos creados por el apply en orden inverso.
