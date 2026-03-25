@@ -168,7 +168,7 @@ Configurar en **Settings → Secrets and variables → Variables**:
 | Variable           | Ejemplo                          | Descripción                                                 |
 | ------------------ | -------------------------------- | ----------------------------------------------------------- |
 | `XC_NAMESPACE`     | `arcadia-prod`                   | Namespace de F5 XC donde se crea el LB y WAF               |
-| `APP_DOMAIN`       | `arcadia-aws-ac.example.com`     | FQDN de la aplicación en el HTTP LB de F5 XC               |
+| `DVWA_DOMAIN`      | `dvwa.example.com`               | FQDN de la aplicación en el HTTP LB de F5 XC               |
 
 ---
 
@@ -217,7 +217,7 @@ Configurar en **Settings → Secrets and variables → Variables**:
   | `TF_VAR_aws_access_key`           | `AWS_ACCESS_KEY` (secret)          | Credenciales AWS para el CE site                     |
   | `TF_VAR_aws_secret_key`           | `AWS_SECRET_KEY` (secret)          | Credenciales AWS para el CE site                     |
   | `TF_VAR_xc_namespace`             | `XC_NAMESPACE` (var)               | Namespace de F5 XC                                   |
-  | `TF_VAR_app_domain`               | `APP_DOMAIN` (var)                 | FQDN del HTTP LB                                     |
+  | `TF_VAR_app_domain`               | `DVWA_DOMAIN` (var)                | FQDN del HTTP LB                                     |
 
 ---
 
@@ -297,7 +297,7 @@ flowchart LR
 - Los tres jobs (`terraform_infra`, `terraform_vm`, `terraform_xc`) terminan en estado `success`.
 - El CE site aparece como `ONLINE` en la consola de F5 XC → **Infrastructure → Sites**.
 - El HTTP Load Balancer está publicado en el Regional Edge.
-- La aplicación DVWA es accesible desde internet a través del dominio configurado en `APP_DOMAIN`.
+- La aplicación DVWA es accesible desde internet a través del dominio configurado en `DVWA_DOMAIN`.
 
 ---
 
