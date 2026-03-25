@@ -146,13 +146,29 @@ f5xc-api-ce-eks/xc  ──►  volterra_origin_pool (k8s_service: crapi-web.crap
                            volterra_app_firewall (WAF policy)
 ```
 
-### Casos de uso típicos
+### Casos de Uso para Laboratorio
 
 1. Demostración de seguridad de APIs sobre RE con CE embebido en EKS, sin infraestructura adicional.
 2. Protección de APIs REST de crAPI con WAF y API Discovery de F5 Distributed Cloud.
 3. Laboratorio de detección de vulnerabilidades OWASP API Security Top 10 en un entorno controlado.
 4. Validación de políticas de seguridad de APIs en modo detección o bloqueo, antes de aplicarlas en producción.
 5. Entorno de pruebas efímero para workshops y capacitaciones de F5 XC sobre EKS en AWS.
+
+### Casos de Uso Reales
+
+1. **Gobernanza de APIs en plataformas Kubernetes multi-tenant.** Equipos de plataforma que exponen APIs internas en EKS a otros equipos o partners externos. El CE embebido en Kubernetes conecta el cluster a F5 XC sin abrir puertos adicionales ni aprovisionar instancias EC2. El Regional Edge global actúa como API Gateway con WAF unificado para todos los tenants, con visibilidad centralizada de todas las llamadas.
+
+2. **API Security con enforcement de esquema OpenAPI en producción.** APIs con contrato Swagger/OpenAPI definido (fintechs con PSD2, healthtech con FHIR, telco con OAS3) donde se requiere rechazar requests fuera del spec. F5 XC sube el spec al Object Store y el HTTP LB valida cada petición contra él — sin modificar el código de la aplicación ni desplegar un API Gateway adicional.
+
+3. **Shift-left de seguridad de APIs en pipelines CI/CD.** El workflow es completamente efímero: levanta un entorno real de API Security (RE + CE en EKS + WAF + spec enforcement) por cada rama de feature o release candidate, valida que el contrato OpenAPI no rompa las reglas de F5 XC, y lo destruye al mergear. Reduce a cero el gap entre lo que se prueba en staging y lo que se aplica en producción.
+
+4. **API Discovery para APIs legacy sin documentación actualizada.** Equipos con APIs en producción sin spec OpenAPI completo o actualizado. Con `xc_api_disc = true`, F5 XC observa el tráfico real en el RE y genera automáticamente un catálogo de endpoints descubiertos. Caso frecuente en modernización de sistemas bancarios, telecomunicaciones o retail con APIs heredadas.
+
+5. **Zero-trust de acceso a APIs en EKS sin Ingress Controller adicional.** El CE en `ves-system` conecta el cluster al RE de F5 XC sin necesitar nginx-ingress, AWS ALB Ingress Controller ni cert-manager. Reduce la superficie de ataque al eliminar componentes de Kubernetes expuestos públicamente, manteniendo un único punto de control y auditoría.
+
+6. **OWASP API Security Top 10 como control permanente en producción.** crAPI replica vulnerabilidades reales de diseño de APIs (BOLA, BFLA, Mass Assignment, Broken Object Property Level Authorization). El WAF de F5 XC en RE + API Protection con spec enforcement cubre sistemáticamente OWASP API Top 10:2023 sin modificar el código de la aplicación.
+
+7. **Cumplimiento regulatorio para APIs expuestas (PCI-DSS, SOC2, ISO 27001).** El Regional Edge actúa como punto de control centralizado y auditado para todas las llamadas a la API. Los security events quedan correlacionados en F5 XC con firma de amenaza, geolocalización y acción tomada — satisfaciendo requisitos de logging y monitoreo de APIs en marcos de cumplimiento normativo.
 
 ---
 
