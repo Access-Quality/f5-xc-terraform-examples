@@ -1,4 +1,4 @@
-name: "Seguridad API en RE para EKS con CE"
+name: "API WAF en RE para CE dentro de EKS - Deploy"
 
 # Secrets (Settings > Secrets and variables > Actions > Secrets):
 #   TF_API_TOKEN            - Terraform Cloud user token

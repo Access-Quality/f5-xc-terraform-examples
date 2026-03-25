@@ -638,8 +638,10 @@ crAPI está diseñada deliberadamente con vulnerabilidades para fines de laborat
 
 ## Ejecución manual
 
+**Archivo de workflow:** `.github/workflows/f5xc-api-ce-eks-apply.yml`
+
 1. Ir a **Actions** en GitHub.
-2. Seleccionar el workflow: **Seguridad API en RE para EKS con CE**.
+2. Seleccionar el workflow: **API WAF en RE para CE dentro de EKS - Deploy**.
 3. Hacer clic en **Run workflow**.
 4. Confirmar en la rama `main` (o la rama configurada).
 5. Monitorear el progreso: los 6 jobs se ejecutan en secuencia:
