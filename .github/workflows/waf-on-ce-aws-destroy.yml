@@ -11,7 +11,7 @@ jobs:
       TF_VAR_api_url: ${{ secrets.XC_API_URL }}
       TF_VAR_xc_tenant: ${{ secrets.XC_TENANT }}
       TF_VAR_xc_namespace: ${{ vars.XC_NAMESPACE }}
-      TF_VAR_app_domain: ${{ vars.APP_DOMAIN }}
+      TF_VAR_app_domain: ${{ vars.BOUTIQUE_DOMAIN }}
       TF_VAR_tf_cloud_organization: ${{ secrets.TF_CLOUD_ORGANIZATION }}
       TF_VAR_aws: ${{ vars.TF_CLOUD_WORKSPACE_INFRA }}
       TF_VAR_tf_cloud_workspace_eks: ${{ vars.TF_CLOUD_WORKSPACE_EKS }}

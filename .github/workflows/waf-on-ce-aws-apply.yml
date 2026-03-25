@@ -25,7 +25,7 @@ name: "F5 XC WAF on CE AWS Deploy"
 #   VPC_CIDR                          - VPC CIDR block (e.g. 10.0.0.0/16)
 #   PROJECT_PREFIX                    - Prefix for all resource names
 #   XC_NAMESPACE                      - F5 XC namespace
-#   APP_DOMAIN                        - App FQDN
+#   BOUTIQUE_DOMAIN                    - App FQDN
 
 on:
   workflow_dispatch:
@@ -335,7 +335,7 @@ jobs:
       TF_VAR_api_url: ${{ secrets.XC_API_URL }}
       TF_VAR_xc_tenant: ${{ secrets.XC_TENANT }}
       TF_VAR_xc_namespace: ${{ vars.XC_NAMESPACE }}
-      TF_VAR_app_domain: ${{ vars.APP_DOMAIN }}
+      TF_VAR_app_domain: ${{ vars.BOUTIQUE_DOMAIN }}
       TF_VAR_tf_cloud_organization: ${{ secrets.TF_CLOUD_ORGANIZATION }}
       TF_VAR_aws: ${{ vars.TF_CLOUD_WORKSPACE_INFRA }}
       TF_VAR_tf_cloud_workspace_eks: ${{ vars.TF_CLOUD_WORKSPACE_EKS }}
