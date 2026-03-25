@@ -1,3 +1,14 @@
+resource "volterra_api_definition" "arcadia" {
+  name      = format("%s-xcapi-%s", local.project_prefix, local.build_suffix)
+  namespace = var.xc_namespace
+
+  depends_on = [null_resource.namespace_ready]
+
+  swagger_specs = [
+    "https://raw.githubusercontent.com/Access-Quality/f5-xc-terraform-examples/main/arcadia/arcadia-oas3-2.0.1.json"
+  ]
+}
+
 resource "volterra_origin_pool" "op" {
   depends_on  = [null_resource.namespace_ready]
   name        = format("%s-xcop-%s", local.project_prefix, local.build_suffix)
@@ -17,7 +28,7 @@ resource "volterra_origin_pool" "op" {
 }
 
 resource "volterra_http_loadbalancer" "lb_https" {
-  depends_on  = [volterra_origin_pool.op, volterra_app_firewall.waap-tf]
+  depends_on  = [volterra_origin_pool.op, volterra_app_firewall.waap-tf, volterra_api_definition.arcadia]
   name        = format("%s-xclb-%s", local.project_prefix, local.build_suffix)
   namespace   = var.xc_namespace
   description = format("HTTP LB with WAF for Arcadia Finance on AWS RE")
@@ -40,6 +51,28 @@ resource "volterra_http_loadbalancer" "lb_https" {
   app_firewall {
     name      = volterra_app_firewall.waap-tf.name
     namespace = var.xc_namespace
+  }
+
+  api_definition {
+    name      = volterra_api_definition.arcadia.name
+    namespace = var.xc_namespace
+  }
+
+  enable_api_discovery {
+    discovered_api_settings {
+      purge_duration_for_inactive_discovered_apis = 7
+    }
+  }
+
+  api_protection_rules {
+    api_groups_rules {
+      metadata {
+        name = "block-undocumented"
+      }
+      action {
+        deny {}
+      }
+    }
   }
 
   disable_waf                     = false

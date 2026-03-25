@@ -14,6 +14,8 @@ Este workflow despliega una solución de **Web Application Firewall (WAF) con F5
 | VIP pública en RE               | El HTTP Load Balancer usa `advertise_on_public_default_vip = true` para exponer la app via RE.         |
 | Aplicación en EC2               | Arcadia Finance corre en una instancia EC2 Amazon Linux 2 con Docker Compose (vía `userdata.sh`).      |
 | Modo blocking configurable      | La WAF policy puede operar en modo bloqueo o detección, controlado por la variable `XC_WAF_BLOCKING`.  |
+| API Discovery automático        | El LB observa tráfico real y construye un inventario de endpoints en F5 XC (aprendizaje pasivo).       |
+| API Protection con OpenAPI spec | El swagger de Arcadia se carga como `volterra_api_definition`; endpoints no documentados son bloqueados. |
 | Infraestructura efímera         | Todo se provisiona desde cero con Terraform y se destruye con el workflow de destroy.                  |
 | Estado remoto compartido        | Los tres workspaces de TFC comparten estado remoto para pasar outputs (IP del EC2, puerto) entre módulos. |
 
@@ -191,7 +193,7 @@ Configurar en **Settings → Secrets and variables → Variables**:
 - **Nota:** usa estado remoto de `aws/infra` para obtener IDs de subred y SG.
 - **Outputs:** IP pública del EC2 y puerto de la app (consumidos por `terraform_xc`).
 
-### `terraform_xc` — F5XC WAF
+### `terraform_xc` — F5XC WAF + API Security
 
 - **Módulo:** `aws/waf-re-aws/xc`
 - **Workspace TFC:** `TF_CLOUD_WORKSPACE_AWS_XC`
@@ -199,8 +201,11 @@ Configurar en **Settings → Secrets and variables → Variables**:
 - **Qué crea / configura:**
   - Namespace de F5 XC.
   - WAF Policy (`volterra_app_firewall`) con modo configurable (blocking/monitoring).
+  - API Definition (`volterra_api_definition`) con el swagger OpenAPI 3.0 de Arcadia Finance.
   - Origin Pool apuntando a la IP pública del EC2.
-  - HTTP Load Balancer publicado en el Regional Edge (`advertise_on_public_default_vip = true`).
+  - HTTP Load Balancer publicado en el Regional Edge (`advertise_on_public_default_vip = true`) con:
+    - **API Discovery** habilitado (aprendizaje pasivo de 7 días para endpoints inactivos).
+    - **API Protection** vinculada al swagger (bloquea endpoints no documentados).
 - **Parámetros relevantes:**
 
   | Variable Terraform              | Origen                             | Propósito                                        |
@@ -422,13 +427,14 @@ curl -i "http://<ARCADIA_DOMAIN>/" \
 
 | Prueba | Resultado con WAF blocking |
 | --- | --- |
-| SQLi en JSON body | `Request Rejected` + `server: volt-adc` + Support ID |
-| XSS en JSON | `Request Rejected` |
-| Path Traversal | `Request Rejected` |
-| Command Injection | `Request Rejected` |
-| Scanner User-Agent | Bloqueado (requiere Bot Defense habilitado) |
-| Credential stuffing | Bloqueado (requiere Bot Defense habilitado) |
-| BOLA / lógica de negocio | Pasa — requiere API Security + OpenAPI spec cargada en el LB |
+| SQLi en JSON body | ✅ `Request Rejected` + `server: volt-adc` + Support ID |
+| XSS en JSON | ✅ `Request Rejected` |
+| Path Traversal | ✅ `Request Rejected` |
+| Command Injection | ✅ `Request Rejected` |
+| Scanner User-Agent | ⚠️ Requiere Bot Defense habilitado |
+| Credential stuffing | ⚠️ Requiere Bot Defense habilitado |
+| BOLA / endpoint no documentado | ✅ Bloqueado — API Protection enforcea el swagger OpenAPI |
+| Schema validation (tipo de dato) | ✅ Bloqueado — el swagger define tipos por campo |
 
 Los eventos de bloqueo quedan registrados en F5 XC → **Security → Security Events** del namespace configurado en `XC_NAMESPACE`.
 
