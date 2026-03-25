@@ -1,4 +1,4 @@
-# Seguridad API en RE con CE en EKS — Apply
+# API WAF en RE para CE dentro de EKS - Deploy
 
 Este workflow despliega una solución de **seguridad de APIs con F5 Distributed Cloud sobre Regional Edge (RE)**, protegiendo la aplicación **crAPI** (Completely Ridiculous API) que corre en un clúster EKS en AWS. El Customer Edge (CE) se despliega **dentro del propio clúster EKS** como workload de Kubernetes, sin necesidad de una instancia EC2 adicional.
 
