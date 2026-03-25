@@ -4,9 +4,7 @@ resource "volterra_api_definition" "arcadia" {
 
   depends_on = [null_resource.namespace_ready]
 
-  swagger_specs = [
-    "https://raw.githubusercontent.com/Access-Quality/f5-xc-terraform-examples/main/arcadia/arcadia-oas3-2.0.1.json"
-  ]
+  swagger_specs = var.xc_api_spec
 }
 
 resource "volterra_origin_pool" "op" {

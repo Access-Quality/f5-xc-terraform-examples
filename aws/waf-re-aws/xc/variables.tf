@@ -33,3 +33,9 @@ variable "xc_waf_blocking" {
   description = "Set WAF to blocking (true) or monitoring (false) mode"
   default     = true
 }
+
+variable "xc_api_spec" {
+  type        = list(string)
+  description = "Internal F5 XC object store path(s) for the Arcadia swagger spec (set by workflow after upload)"
+  default     = []
+}
