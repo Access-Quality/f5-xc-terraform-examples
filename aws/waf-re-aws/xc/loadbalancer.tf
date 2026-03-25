@@ -66,7 +66,7 @@ resource "volterra_http_loadbalancer" "lb_https" {
     validation_all_spec_endpoints {
       validation_mode {
         validation_mode_active {
-          request_validation_properties = ["PROPERTY_QUERY_PARAMS", "PROPERTY_HTTP_HEADERS", "PROPERTY_COOKIE_PARAMS"]
+          request_validation_properties = ["PROPERTY_QUERY_PARAMETERS", "PROPERTY_PATH_PARAMETERS", "PROPERTY_CONTENT_TYPE", "PROPERTY_COOKIE_PARAMETERS", "PROPERTY_HTTP_HEADERS", "PROPERTY_HTTP_BODY"]
           enforcement_block             = true
           enforcement_report            = false
         }
