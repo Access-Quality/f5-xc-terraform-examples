@@ -77,3 +77,11 @@ Despliega una solución de **seguridad de APIs sobre el Regional Edge (RE) de F5
 | `f5xc-api-ce-eks-apply.yml`                | [README](readme/README-f5xc-api-ce-eks-apply.md)                      |
 
 ---
+
+## Historial de Cambios
+
+### 2026-03-25
+- **WAF on CE Azure** (`waf-on-ce-az-apply.yml` / `waf-on-ce-az-destroy.yml`): la variable de GitHub `APP_DOMAIN` fue renombrada a `BOUTIQUE_DOMAIN` para mayor claridad sobre la aplicación protegida. Actualizar el valor en *Settings → Secrets and variables → Variables* del repositorio.
+- **WAF on CE AWS** (`waf-on-ce-aws-apply.yml` / `waf-on-ce-aws-destroy.yml`): nombre del workflow actualizado a `WAF on CE AWS - Deploy / Destroy` para seguir la convención de nomenclatura del resto de workflows.
+
+---
