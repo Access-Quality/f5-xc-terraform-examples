@@ -66,11 +66,12 @@ resource "volterra_http_loadbalancer" "lb_https" {
 
   api_protection_rules {
     api_groups_rules {
+      base_path = "/"
       metadata {
         name = "block-undocumented"
       }
       action {
-        deny {}
+        deny = true
       }
     }
   }
