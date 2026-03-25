@@ -6,10 +6,6 @@ name: "WAF en RE para VM en AWS - Destroy"
 # environment instead of from TFC variable sets.
 
 on:
-  push:
-    branches:
-      - destroy-waf-re-aws
-  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -61,45 +57,10 @@ jobs:
         id: validate
         run: terraform validate -no-color
 
-      - name: Terraform Plan
-        id: plan
-        if: github.event_name == 'pull_request'
-        run: terraform plan -destroy -no-color -input=false
-        continue-on-error: true
-
-      - uses: actions/github-script@v6
-        if: github.event_name == 'pull_request'
-        env:
-          PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const output = `#### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
-            #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
-            #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
-            <details><summary>Show Plan</summary>
-            \`\`\`\n
-            ${process.env.PLAN}
-            \`\`\`
-            </details>
-            *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: output
-            })
-
-      - name: Terraform Plan Status
-        if: steps.plan.outcome == 'failure'
-        run: exit 1
-
       - name: Terraform Destroy
-        if: (github.ref == 'refs/heads/destroy-waf-re-aws' && github.event_name == 'push') || github.event_name == 'workflow_dispatch'
         run: terraform destroy -auto-approve -input=false
 
       - name: Delete XC Namespace
-        if: (github.ref == 'refs/heads/destroy-waf-re-aws' && github.event_name == 'push') || github.event_name == 'workflow_dispatch'
         run: |
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
             "${{ secrets.XC_API_URL }}/web/namespaces/${{ vars.XC_NAMESPACE }}" \
@@ -161,41 +122,7 @@ jobs:
         id: validate
         run: terraform validate -no-color
 
-      - name: Terraform Plan
-        id: plan
-        if: github.event_name == 'pull_request'
-        run: terraform plan -destroy -no-color -input=false
-        continue-on-error: true
-
-      - uses: actions/github-script@v6
-        if: github.event_name == 'pull_request'
-        env:
-          PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const output = `#### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
-            #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
-            #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
-            <details><summary>Show Plan</summary>
-            \`\`\`\n
-            ${process.env.PLAN}
-            \`\`\`
-            </details>
-            *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: output
-            })
-
-      - name: Terraform Plan Status
-        if: steps.plan.outcome == 'failure'
-        run: exit 1
-
       - name: Terraform Destroy
-        if: (github.ref == 'refs/heads/destroy-waf-re-aws' && github.event_name == 'push') || github.event_name == 'workflow_dispatch'
         run: terraform destroy -auto-approve -input=false
 
   terraform_infra:
@@ -242,39 +169,5 @@ jobs:
         id: validate
         run: terraform validate -no-color
 
-      - name: Terraform Plan
-        id: plan
-        if: github.event_name == 'pull_request'
-        run: terraform plan -destroy -no-color -input=false
-        continue-on-error: true
-
-      - uses: actions/github-script@v6
-        if: github.event_name == 'pull_request'
-        env:
-          PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const output = `#### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
-            #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
-            #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
-            <details><summary>Show Plan</summary>
-            \`\`\`\n
-            ${process.env.PLAN}
-            \`\`\`
-            </details>
-            *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: output
-            })
-
-      - name: Terraform Plan Status
-        if: steps.plan.outcome == 'failure'
-        run: exit 1
-
       - name: Terraform Destroy
-        if: (github.ref == 'refs/heads/destroy-waf-re-aws' && github.event_name == 'push') || github.event_name == 'workflow_dispatch'
         run: terraform destroy -auto-approve -input=false
