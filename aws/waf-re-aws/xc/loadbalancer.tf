@@ -53,25 +53,36 @@ resource "volterra_http_loadbalancer" "lb_https" {
     namespace = var.xc_namespace
   }
 
-  api_definition {
-    name      = volterra_api_definition.arcadia.name
-    namespace = var.xc_namespace
-  }
-
   enable_api_discovery {
+    enable_learn_from_redirect_traffic = true
     discovered_api_settings {
       purge_duration_for_inactive_discovered_apis = 7
     }
   }
 
-  api_protection_rules {
-    api_groups_rules {
-      base_path = "/"
-      metadata {
-        name = "block-undocumented"
+  api_specification {
+    api_definition {
+      name      = volterra_api_definition.arcadia.name
+      namespace = var.xc_namespace
+    }
+    validation_all_spec_endpoints {
+      validation_mode {
+        validation_mode_active {
+          request_validation_properties = ["PROPERTY_QUERY_PARAMS", "PROPERTY_HTTP_HEADERS", "PROPERTY_COOKIE_PARAMS"]
+          enforcement_block             = true
+          enforcement_report            = false
+        }
       }
-      action {
-        deny = true
+      fall_through_mode {
+        fall_through_mode_custom {
+          open_api_validation_rules {
+            metadata {
+              name = format("%s-fall-through-block-%s", local.project_prefix, local.build_suffix)
+            }
+            action_block = true
+            base_path    = "/"
+          }
+        }
       }
     }
   }
