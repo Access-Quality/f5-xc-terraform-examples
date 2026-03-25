@@ -651,3 +651,13 @@ crAPI está diseñada deliberadamente con vulnerabilidades para fines de laborat
    - **Job 4** (`terraform_ce`): instala el CE como workload en EKS.
    - **Job 5** (`terraform_xc`): pollea `vp-manager-0`, aprueba el registro del CE con `-replace`, espera hasta 20 min a que `ver-0` esté Online, y crea el Load Balancer + WAF en F5 XC.
    - **Job 6** (`show_endpoints`): imprime las URLs de acceso finales (CRAPI_DOMAIN + ELBs de AWS) directamente en el log del workflow.
+
+## Destrucción del entorno
+
+**Archivo de workflow:** `.github/workflows/f5xc-api-ce-eks-destroy.yml`
+
+1. Ir a **Actions** en GitHub.
+2. Seleccionar el workflow: **API WAF en RE para CE dentro de EKS - Destroy**.
+3. Hacer clic en **Run workflow** y confirmar.
+4. Los jobs se ejecutan en orden inverso al deploy: XC → CE → crAPI → EKS → Infra.
+5. Antes del destroy del cluster EKS, el workflow elimina automáticamente los ELBs creados por Kubernetes (`crapi-web`, `mailhog-ingress`, `lb-ver`) para evitar que bloqueen la eliminación del VPC.
