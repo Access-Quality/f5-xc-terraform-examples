@@ -40,7 +40,7 @@ Despliega un **Web Application Firewall (WAF) sobre el Regional Edge (RE) de F5 
 
 ---
 
-### 5. WAF en RE + AppConnect (VM en AWS) — `waf-re-ac-aws-vm-apply.yml`
+### 5. WAF en RE + AppConnect AWS — `waf-re-ac-aws-vm-apply.yml`
 
 Despliega un **Web Application Firewall (WAF) sobre el Regional Edge (RE) de F5 Distributed Cloud con AppConnect**, protegiendo la aplicación **DVWA** (Damn Vulnerable Web Application) que corre en una instancia EC2 dentro de un VPC privado en AWS. A diferencia del caso 4, la aplicación **no necesita una IP pública** y se instala un **Customer Edge (CE) en AWS**: el tráfico llega al RE global de F5 XC y se reenvía a la app a través de un túnel cifrado establecido por el CE. Esto permite exponer aplicaciones en subredes privadas sin abrir puertos al exterior, combinando seguridad WAF en el RE con conectividad AppConnect.
 

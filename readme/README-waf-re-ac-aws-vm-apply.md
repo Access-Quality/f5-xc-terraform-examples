@@ -1,4 +1,4 @@
-# WAF en RE + AppConnect (VM en AWS) — Apply
+# WAF en RE + AppConnect AWS - Deploy
 
 Este workflow despliega una solución de **Web Application Firewall (WAF) con F5 Distributed Cloud sobre el Regional Edge (RE) y AppConnect**, protegiendo la aplicación **DVWA** (Damn Vulnerable Web Application) que corre en una instancia EC2 dentro de un VPC **privado** en AWS. A diferencia del caso WAF en RE simple, aquí la aplicación **no necesita una IP pública** y se instala un **Customer Edge (CE) en AWS**: el tráfico de internet llega al RE global de F5 XC y se reenvía a la app a través de un túnel cifrado establecido por el CE (AppConnect).
 
@@ -285,8 +285,10 @@ flowchart LR
 
 ## Ejecución manual
 
+**Archivo de workflow:** `.github/workflows/waf-re-ac-aws-vm-apply.yml`
+
 1. Ir a **Actions** en GitHub.
-2. Seleccionar el workflow: **F5XC WAF on RE + AppConnect AWS Deploy**.
+2. Seleccionar el workflow: **WAF en RE + AppConnect AWS - Deploy**.
 3. Hacer clic en **Run workflow**.
 4. Confirmar la ejecución. No hay inputs adicionales.
 
@@ -295,7 +297,7 @@ flowchart LR
 - Los tres jobs (`terraform_infra`, `terraform_vm`, `terraform_xc`) terminan en estado `success`.
 - El CE site aparece como `ONLINE` en la consola de F5 XC → **Infrastructure → Sites**.
 - El HTTP Load Balancer está publicado en el Regional Edge.
-- La aplicación Arcadia Finance es accesible desde internet a través del dominio configurado en `APP_DOMAIN`.
+- La aplicación DVWA es accesible desde internet a través del dominio configurado en `APP_DOMAIN`.
 
 ---
 
