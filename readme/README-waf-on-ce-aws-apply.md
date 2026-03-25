@@ -114,12 +114,28 @@ Internet
 | Subnet CE           | `ce-outside` (`/26`) — XC gestiona el routing de esta subnet (sin route table propia)   |
 | Security Groups     | SGs dedicados para el EKS cluster y los worker nodes                      |
 
-### Casos de uso típicos
+### Casos de Uso para Laboratorio
 
 1. Demostración de WAF on CE en AWS sin necesidad de dominio público ni certificado TLS.
 2. Laboratorio de protección de aplicaciones containerizadas en EKS con F5 XC en modo bloqueo.
 3. Validación de políticas WAF de F5 XC (modo blocking) que bloquea XSS, SQLi y amenazas OWASP.
 4. Entorno de pruebas efímero para workshops y capacitaciones de F5 Distributed Cloud en AWS.
+
+### Casos de Uso Reales
+
+1. **Protección de aplicaciones de e-commerce en AWS sin ALB público.** Retailers con plataformas en EKS (Magento, Shopify headless, etc.) que no quieren exponer un ALB/NLB público ni pagar por AWS WAF. El CE actúa como único punto de ingress con WAF de nivel enterprise, accediendo directamente al NodePort del nodo mediante IP privada dentro del VPC.
+
+2. **Migración progresiva de WAF on-prem a nube.** Organizaciones que operan appliances físicos (BIG-IP iSeries, Fortinet) y quieren trasladar la inspección de tráfico a AWS sin rediseñar la arquitectura interna del EKS. El CE reemplaza el appliance con el mismo comportamiento de blocking y la misma política WAF.
+
+3. **Seguridad de servicios internos accedidos solo desde la red corporativa.** Aplicaciones REST/gRPC en EKS que no deben ser públicas pero requieren WAF. Con `advertise_custom` aplicado únicamente al CE Site (no al Regional Edge global de F5 XC), el HTTP Load Balancer no es alcanzable desde el internet público — solo desde dentro del VPC o vía VPN conectada al CE.
+
+4. **Cumplimiento PCI-DSS para aplicaciones de pago en contenedores.** La presencia de un WAF en modo blocking frente al frontend de una aplicación de checkout cubre el requisito PCI-DSS 6.4 (protección de aplicaciones web que procesan datos de tarjeta). El módulo aplica la política de bloqueo (`xc_waf_blocking = true`) sin requerir configuración manual en la consola de F5 XC.
+
+5. **Disaster Recovery y failover multi-región.** Desplegar CE sites equivalentes en dos regiones AWS (ej. `us-east-1` y `us-west-2`) con el mismo HTTP Load Balancer de F5 XC. Si un CE queda inaccesible, F5 XC redirige el tráfico al site alternativo sin cambio de DNS ni intervención manual.
+
+6. **Pipeline de DevSecOps con WAF real desde staging.** Equipos que necesitan que el entorno de staging tenga el mismo WAF policy que producción. Al ser completamente efímero (apply + destroy vía workflow), se puede levantar y destruir un entorno completo con WAF blocking para cada release candidate o rama de feature.
+
+7. **Protección de microservicios legacy sin soporte TLS al origen.** Aplicaciones internas (legacy, backends IoT, servicios de integración) que solo soportan HTTP y donde añadir TLS al origen no es viable. La combinación `no_tls = true` + `http_only = true` del módulo cubre exactamente este patrón sin modificar la aplicación.
 
 ### Componentes desplegados
 
