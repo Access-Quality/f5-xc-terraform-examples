@@ -24,6 +24,7 @@ jobs:
       TF_VAR_xc_namespace:             ${{ vars.XC_NAMESPACE }}
       TF_VAR_app_domain:               ${{ vars.ARCADIA_DOMAIN }}
       TF_VAR_xc_waf_blocking:          ${{ vars.XC_WAF_BLOCKING }}
+      TF_VAR_xc_api_spec:              '[]'
       VES_P12_PASSWORD:                ${{ secrets.XC_P12_PASSWORD }}
     steps:
       - name: Checkout
@@ -59,6 +60,34 @@ jobs:
 
       - name: Terraform Destroy
         run: terraform destroy -auto-approve -input=false
+
+      - name: Delete Arcadia swagger from F5 XC object store
+        run: |
+          SWAGGER_NAME="arcadia-oas3"
+          API_URL="${{ secrets.XC_API_URL }}"
+          NAMESPACE="${{ vars.XC_NAMESPACE }}"
+
+          openssl pkcs12 -legacy -in api.p12 -clcerts -nokeys \
+            -passin pass:"${{ secrets.XC_P12_PASSWORD }}" -out /tmp/cert.pem 2>/dev/null || \
+          openssl pkcs12 -in api.p12 -clcerts -nokeys \
+            -passin pass:"${{ secrets.XC_P12_PASSWORD }}" -out /tmp/cert.pem
+          openssl pkcs12 -legacy -in api.p12 -nocerts -nodes \
+            -passin pass:"${{ secrets.XC_P12_PASSWORD }}" -out /tmp/key.pem 2>/dev/null || \
+          openssl pkcs12 -in api.p12 -nocerts -nodes \
+            -passin pass:"${{ secrets.XC_P12_PASSWORD }}" -out /tmp/key.pem
+
+          HTTP_CODE=$(curl -s -o /tmp/swagger_del.json -w "%{http_code}" \
+            --cert /tmp/cert.pem --key /tmp/key.pem \
+            -X DELETE \
+            "${API_URL}/object_store/namespaces/${NAMESPACE}/stored_objects/swagger/${SWAGGER_NAME}")
+          rm -f /tmp/cert.pem /tmp/key.pem
+          echo "Response code: ${HTTP_CODE}"
+          cat /tmp/swagger_del.json
+          if [ "${HTTP_CODE}" = "200" ] || [ "${HTTP_CODE}" = "404" ]; then
+            echo "Swagger stored object removed (${HTTP_CODE})."
+          else
+            echo "WARNING: Could not delete swagger stored object (HTTP ${HTTP_CODE}) — delete manually if needed."
+          fi
 
       - name: Delete XC Namespace
         run: |
