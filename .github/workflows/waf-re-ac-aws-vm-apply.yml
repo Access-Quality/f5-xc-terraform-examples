@@ -177,6 +177,9 @@ jobs:
         id: validate
         run: terraform validate -no-color
 
+      - name: Import namespace if already exists
+        run: terraform import volterra_namespace.this ${{ vars.XC_NAMESPACE }} || true
+
       - name: Terraform Plan
         id: plan
         run: terraform plan -no-color -input=false
