@@ -69,6 +69,8 @@ jobs:
             echo "ERROR: Failed to extract cert/key from P12"
             exit 1
           fi
+          echo "Waiting 30s for F5 XC control plane to propagate object deletion..."
+          sleep 30
           HTTP_CODE=$(curl -s -o /tmp/ns_del_response.json -w "%{http_code}" \
             --cert /tmp/client.crt \
             --key /tmp/client.key \
