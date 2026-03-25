@@ -1,10 +1,9 @@
-resource "volterra_namespace" "this" {
-  name        = var.xc_namespace
-  description = format("Namespace for %s", var.xc_namespace)
-}
+# Namespace is pre-created via curl in the workflow (tolerates 409 if already exists)
+# A null_resource anchors the dependency so downstream resources wait for the pre-creation step
+resource "null_resource" "namespace_ready" {}
 
 resource "volterra_app_firewall" "waap-tf" {
-  depends_on  = [volterra_namespace.this]
+  depends_on  = [null_resource.namespace_ready]
   name        = format("%s-xcw-%s", local.project_prefix, local.build_suffix)
   namespace   = var.xc_namespace
   description = format("WAF in block mode for %s", "${local.project_prefix}-xcw-${local.build_suffix}")

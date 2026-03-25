@@ -1,5 +1,5 @@
 resource "volterra_origin_pool" "op" {
-  depends_on  = [volterra_namespace.this, volterra_tf_params_action.apply_ce]
+  depends_on  = [null_resource.namespace_ready, volterra_tf_params_action.apply_ce]
   name        = format("%s-xcop-%s", local.project_prefix, local.build_suffix)
   namespace   = var.xc_namespace
   description = format("Origin pool pointing to DVWA at %s:%s", local.origin_ip, local.origin_port)

@@ -169,6 +169,31 @@ jobs:
           EOF
           echo "${{ secrets.XC_API_P12_FILE }}" | base64 -d > api.p12
 
+      - name: Create XC Namespace if not exists
+        run: |
+          XC_API_BASE=$(echo "${{ secrets.XC_API_URL }}" | sed 's|/api$||')
+          openssl pkcs12 -legacy -in api.p12 -passin pass:"${{ secrets.XC_P12_PASSWORD }}" -nokeys -clcerts -out /tmp/client.crt 2>/dev/null
+          openssl pkcs12 -legacy -in api.p12 -passin pass:"${{ secrets.XC_P12_PASSWORD }}" -nocerts -nodes -out /tmp/client.key 2>/dev/null
+          if [ ! -s /tmp/client.crt ] || [ ! -s /tmp/client.key ]; then
+            echo "ERROR: Failed to extract cert/key from P12"
+            exit 1
+          fi
+          HTTP_CODE=$(curl -s -o /tmp/ns_response.json -w "%{http_code}" \
+            --cert /tmp/client.crt \
+            --key /tmp/client.key \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -d "{\"metadata\":{\"name\":\"${{ vars.XC_NAMESPACE }}\",\"namespace\":\"\"},\"spec\":{}}" \
+            "${XC_API_BASE}/api/web/namespaces")
+          rm -f /tmp/client.crt /tmp/client.key
+          echo "Response code: ${HTTP_CODE}"
+          cat /tmp/ns_response.json
+          if [ "${HTTP_CODE}" != "200" ] && [ "${HTTP_CODE}" != "409" ]; then
+            echo "ERROR: Failed to create namespace (HTTP ${HTTP_CODE})"
+            exit 1
+          fi
+          echo "Namespace ready (200=created, 409=already existed)"
+
       - name: Terraform Init
         id: init
         run: terraform init
@@ -177,8 +202,8 @@ jobs:
         id: validate
         run: terraform validate -no-color
 
-      - name: Import namespace if already exists
-        run: terraform import volterra_namespace.this ${{ vars.XC_NAMESPACE }} || true
+      - name: Remove namespace from TF state if present
+        run: terraform state rm volterra_namespace.this || true
 
       - name: Terraform Plan
         id: plan
