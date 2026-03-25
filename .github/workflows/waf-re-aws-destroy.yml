@@ -79,7 +79,14 @@ jobs:
           rm -f /tmp/client.crt /tmp/client.key
           echo "Response code: ${HTTP_CODE}"
           cat /tmp/ns_del_response.json
-          if [ "${HTTP_CODE}" != "200" ] && [ "${HTTP_CODE}" != "404" ]; then
+          if [ "${HTTP_CODE}" = "200" ]; then
+            echo "Namespace deleted successfully."
+          elif [ "${HTTP_CODE}" = "404" ]; then
+            echo "Namespace already gone (404)."
+          elif [ "${HTTP_CODE}" = "403" ]; then
+            echo "WARNING: Could not delete namespace (HTTP 403 - insufficient permissions)."
+            echo "Delete namespace '${{ vars.XC_NAMESPACE }}' manually in F5 XC Console -> Namespaces."
+          else
             echo "ERROR: Failed to delete namespace (HTTP ${HTTP_CODE})"
             exit 1
           fi
