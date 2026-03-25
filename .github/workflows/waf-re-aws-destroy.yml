@@ -62,14 +62,26 @@ jobs:
 
       - name: Delete XC Namespace
         run: |
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
-            "${{ secrets.XC_API_URL }}/web/namespaces/${{ vars.XC_NAMESPACE }}" \
-            --cert-type P12 --cert api.p12:${{ secrets.XC_P12_PASSWORD }})
-          if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "404" ]; then
-            echo "Error deleting namespace: HTTP $HTTP_STATUS"
+          XC_API_BASE=$(echo "${{ secrets.XC_API_URL }}" | sed 's|/api$||')
+          openssl pkcs12 -legacy -in api.p12 -passin pass:"${{ secrets.XC_P12_PASSWORD }}" -nokeys -clcerts -out /tmp/client.crt 2>/dev/null
+          openssl pkcs12 -legacy -in api.p12 -passin pass:"${{ secrets.XC_P12_PASSWORD }}" -nocerts -nodes -out /tmp/client.key 2>/dev/null
+          if [ ! -s /tmp/client.crt ] || [ ! -s /tmp/client.key ]; then
+            echo "ERROR: Failed to extract cert/key from P12"
             exit 1
           fi
-          echo "Namespace deleted (HTTP $HTTP_STATUS)"
+          HTTP_CODE=$(curl -s -o /tmp/ns_del_response.json -w "%{http_code}" \
+            --cert /tmp/client.crt \
+            --key /tmp/client.key \
+            -X DELETE \
+            "${XC_API_BASE}/api/web/namespaces/${{ vars.XC_NAMESPACE }}")
+          rm -f /tmp/client.crt /tmp/client.key
+          echo "Response code: ${HTTP_CODE}"
+          cat /tmp/ns_del_response.json
+          if [ "${HTTP_CODE}" != "200" ] && [ "${HTTP_CODE}" != "404" ]; then
+            echo "ERROR: Failed to delete namespace (HTTP ${HTTP_CODE})"
+            exit 1
+          fi
+          echo "Namespace deleted (200=deleted, 404=already gone)"
 
   terraform_vm:
     name: "AWS VM (Arcadia)"
