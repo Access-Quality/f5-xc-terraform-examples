@@ -78,7 +78,7 @@ resource "volterra_http_loadbalancer" "lb_https" {
               name = format("%s-fall-through-block-%s", local.project_prefix, local.build_suffix)
             }
             action_block = true
-            base_path    = "/"
+            base_path    = "/api/"
           }
         }
       }
