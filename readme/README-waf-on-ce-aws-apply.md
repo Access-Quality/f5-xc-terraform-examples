@@ -414,8 +414,10 @@ flowchart LR
 
 ## Ejecución manual
 
+**Archivo de workflow:** `.github/workflows/waf-on-ce-aws-apply.yml`
+
 1. Ir a **Actions** en GitHub.
-2. Seleccionar el workflow: **F5 XC WAF on CE AWS Deploy**.
+2. Seleccionar el workflow: **WAF on CE AWS - Deploy**.
 3. Hacer clic en **Run workflow**.
 4. Confirmar la ejecución. No hay inputs adicionales.
 
@@ -424,7 +426,7 @@ flowchart LR
 - Los cinco jobs terminan en estado `success` (`setup_tfc_workspaces`, `terraform_infra`, `terraform_eks_creation`, `Boutique_app_deploy`, `volt_mesh_site_deploy`).
 - El namespace indicado en `XC_NAMESPACE` existe en la consola de F5 XC.
 - El HTTP Load Balancer aparece publicado en el AWS CE Site.
-- La aplicación Online Boutique es accesible desde internet a través del dominio configurado en `APP_DOMAIN`.
+- La aplicación Online Boutique es accesible desde internet a través del dominio configurado en `BOUTIQUE_DOMAIN`.
 
 ---
 
@@ -443,7 +445,7 @@ En la consola de F5 XC (`https://<tenant>.console.ves.volterra.io`):
 
 ### 2. Resolver el dominio (si no hay delegación DNS)
 
-El HTTP LB de F5 XC está configurado con el dominio `APP_DOMAIN` pero **no usa delegación DNS** (`xc_delegation = false`). Para acceder desde el navegador o curl es necesario resolver el dominio manualmente.
+El HTTP LB de F5 XC está configurado con el dominio `BOUTIQUE_DOMAIN` pero **no usa delegación DNS** (`xc_delegation = false`). Para acceder desde el navegador o curl es necesario resolver el dominio manualmente.
 
 **Obtener la IP pública del CE:**
 
@@ -460,7 +462,7 @@ sudo nano /etc/hosts
 Añadir al final:
 
 ```
-<IP_PUBLICA_CE>   <APP_DOMAIN>
+<IP_PUBLICA_CE>   <BOUTIQUE_DOMAIN>
 ```
 
 Por ejemplo:
@@ -472,13 +474,13 @@ Por ejemplo:
 ### 3. Acceder a la aplicación
 
 ```bash
-curl -v http://<APP_DOMAIN>/
+curl -v http://<BOUTIQUE_DOMAIN>/
 ```
 
 La respuesta debe ser HTTP 200 con el HTML de Online Boutique. También se puede abrir en el navegador:
 
 ```
-http://<APP_DOMAIN>/
+http://<BOUTIQUE_DOMAIN>/
 ```
 
 ### 4. Verificar la WAF (modo blocking)
@@ -487,13 +489,13 @@ A diferencia del caso Azure, el WAF está en **modo bloqueo**. Enviar un request
 
 ```bash
 # XSS en query string — debe retornar 403
-curl -v "http://<APP_DOMAIN>/?x=<script>alert(1)</script>"
+curl -v "http://<BOUTIQUE_DOMAIN>/?x=<script>alert(1)</script>"
 
 # SQL injection básica — debe retornar 403
-curl -v "http://<APP_DOMAIN>/?id=1'+OR+'1'='1"
+curl -v "http://<BOUTIQUE_DOMAIN>/?id=1'+OR+'1'='1"
 
 # Path traversal — debe retornar 403
-curl -v "http://<APP_DOMAIN>/../../etc/passwd"
+curl -v "http://<BOUTIQUE_DOMAIN>/../../etc/passwd"
 ```
 
 **Verificar los eventos en F5 XC:**
