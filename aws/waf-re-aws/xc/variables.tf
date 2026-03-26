@@ -39,3 +39,9 @@ variable "xc_api_spec" {
   description = "Internal F5 XC object store path(s) for the Arcadia swagger spec (set by workflow after upload)"
   default     = []
 }
+
+variable "xc_bot_defense" {
+  type        = bool
+  description = "Enable Bot Defense on the HTTP Load Balancer (true = enabled, false = disabled)"
+  default     = false
+}

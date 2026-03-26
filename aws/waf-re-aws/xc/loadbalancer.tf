@@ -85,6 +85,42 @@ resource "volterra_http_loadbalancer" "lb_https" {
     }
   }
 
+  dynamic "bot_defense" {
+    for_each = var.xc_bot_defense ? [1] : []
+    content {
+      policy {
+        javascript_mode   = "ASYNC_JS_NO_CACHING"
+        disable_js_insert = false
+        js_insert_all_pages {
+          javascript_location = "AFTER_HEAD"
+        }
+        disable_mobile_sdk = true
+        js_download_path   = "/common.js"
+        protected_app_endpoints {
+          metadata {
+            name = format("%s-bot-login-%s", local.project_prefix, local.build_suffix)
+          }
+          http_methods = ["METHOD_POST"]
+          mitigation {
+            block {
+              body = "string:///WW91ciByZXF1ZXN0IHdhcyBibG9ja2VkIGJ5IEJvdCBEZWZlbnNlLgo="
+            }
+          }
+          path {
+            path = "/trading/auth.php"
+          }
+          flow_label {
+            authentication {
+              login {}
+            }
+          }
+        }
+      }
+      regional_endpoint = "US"
+      timeout           = 1000
+    }
+  }
+
   disable_waf                     = false
   round_robin                     = true
   service_policies_from_namespace = true

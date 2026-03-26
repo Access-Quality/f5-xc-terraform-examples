@@ -125,6 +125,7 @@ jobs:
       TF_VAR_xc_namespace:             ${{ vars.XC_NAMESPACE }}
       TF_VAR_app_domain:               ${{ vars.ARCADIA_DOMAIN }}
       TF_VAR_xc_waf_blocking:          ${{ vars.XC_WAF_BLOCKING }}
+      TF_VAR_xc_bot_defense:           ${{ vars.XC_BOT_DEFENSE }}
       VES_P12_PASSWORD:                ${{ secrets.XC_P12_PASSWORD }}
       VOLT_API_P12_FILE:               api.p12
     steps:
