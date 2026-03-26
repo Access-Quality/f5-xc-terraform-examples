@@ -529,8 +529,8 @@ curl -i "http://<ARCADIA_DOMAIN>/" \
 | XSS en JSON | ✅ `Request Rejected` |
 | Path Traversal | ✅ `Request Rejected` |
 | Command Injection | ✅ `Request Rejected` |
-| Scanner User-Agent | ⚠️ Requiere Bot Defense habilitado |
-| Credential stuffing | ⚠️ Requiere Bot Defense habilitado |
+| Scanner User-Agent | ✅ Bloqueado por Bot Defense (HTTP 200 + cuerpo de bloqueo) |
+| Credential stuffing | ✅ Bloqueado por Bot Defense (HTTP 200 + cuerpo de bloqueo) |
 | BOLA / endpoint no documentado | ✅ Bloqueado — API Protection enforcea el swagger OpenAPI |
 | Schema validation (tipo de dato) | ✅ Bloqueado — `amount`/`account` enviados como string desde el browser |
 | Endpoint shadow no documentado (`side_bar_table.php`) | ✅ Bloqueado — la UI no puede cargar tarjetas ni ejecutar Make Payment |
