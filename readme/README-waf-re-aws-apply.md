@@ -13,7 +13,7 @@ Este workflow despliega una solución de **Web Application Firewall (WAF), API P
 | WAF en Regional Edge            | F5 XC inspecciona el tráfico en el RE global, sin necesidad de desplegar un Customer Edge en AWS.      |
 | VIP pública en RE               | El HTTP Load Balancer usa `advertise_on_public_default_vip = true` para exponer la app via RE.         |
 | Aplicación en EC2               | Arcadia Finance corre en una instancia EC2 Amazon Linux 2 con Docker Compose (vía `userdata.sh`).      |
-| Modo blocking configurable      | La WAF policy puede operar en modo bloqueo o detección, controlado por la variable `XC_WAF_BLOCKING`.  |
+| Modo blocking activo            | La WAF policy opera en modo **bloqueo** (`XC_WAF_BLOCKING = true`), bloqueando ataques OWASP Top 10.   |
 | API Discovery automático        | El LB observa tráfico real y construye un inventario de endpoints en F5 XC (aprendizaje pasivo).       |
 | API Protection con OpenAPI spec | El swagger de Arcadia se carga como `volterra_api_definition`; validación activa en modo **report** (no bloquea) para permitir el flujo completo de la UI. |
 | Infraestructura efímera         | Todo se provisiona desde cero con Terraform y se destruye con el workflow de destroy.                  |
@@ -32,7 +32,7 @@ Internet
 │  • HTTP Load Balancer                                   │
 │  • advertise_on_public_default_vip = true               │
 │                                                          │
-│  • WAF inspection (block/detect mode)                   │
+│  • WAF inspection (block mode — XC_WAF_BLOCKING=true)   │
 │      └─ OWASP Top 10, SQLi, XSS, Path Traversal        │
 │                                                          │
 │  • API Discovery (aprendizaje pasivo de endpoints)      │
@@ -395,7 +395,7 @@ Con acceso directo:
 
 | Capacidad | Modo | Efecto |
 |-----------|------|--------|
-| **WAF** | Block/Detect según `XC_WAF_BLOCKING` | Bloquea (true) o reporta (false) ataques OWASP |
+| **WAF** | **Block** (`XC_WAF_BLOCKING = true`) | Bloquea ataques OWASP Top 10 con HTTP 403 |
 | **API Protection** | **Report** (no block) | Valida y registra eventos, no bloquea la UI |
 | **Bot Defense** | **Flag** (no block) | Detecta y registra bots, permite acceso del browser |
 
