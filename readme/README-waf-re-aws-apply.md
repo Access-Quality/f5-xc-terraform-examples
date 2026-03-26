@@ -231,11 +231,17 @@ flowchart LR
   INET[Internet]
 
   subgraph XC_PLATFORM[F5 Distributed Cloud — Regional Edge]
+    XC_NS[XC Namespace]
     XC_LB[HTTP Load Balancer\nadvertise_on_public_default_vip]
     XC_WAF[WAF Policy\nblocking / monitoring]
-    XC_NS[XC Namespace]
+    XC_APIDEF[API Definition\narcadia-oas3 swagger]
+    XC_APIPROT[API Protection\nbloquea endpoints no documentados\nvalida tipos de datos por campo]
+    XC_APIDISC[API Discovery\naprendizaje pasivo de endpoints]
     XC_NS --> XC_LB
     XC_LB --> XC_WAF
+    XC_LB --> XC_APIDISC
+    XC_LB --> XC_APIPROT
+    XC_APIDEF --> XC_APIPROT
   end
 
   subgraph AWS_VPC[AWS VPC]
