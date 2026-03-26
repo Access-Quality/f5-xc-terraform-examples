@@ -636,6 +636,96 @@ crAPI está diseñada deliberadamente con vulnerabilidades para fines de laborat
 
 ---
 
+## Pruebas de seguridad — crAPI con F5 XC API Security
+
+crAPI (Completely Ridiculous API) está diseñada específicamente para demostrar el **OWASP API Security Top 10**. Es la app de referencia para explotar las capacidades de API Discovery, API Protection y WAF de F5 XC.
+
+### 1. API Discovery — inventario automático de endpoints
+
+Navegar por la app (registro, login, ver vehículos, reservar servicio de mecánico) y revisar en F5 XC:
+
+**F5 XC Console → Security → API Security → API Discovery**
+
+XC descubrirá automáticamente los endpoints observados en el tráfico. Comparar el inventario contra el OpenAPI de crAPI para identificar endpoints no documentados (shadow APIs).
+
+### 2. BOLA — Broken Object Level Authorization (OWASP API1)
+
+```bash
+# Login y obtener token
+TOKEN=$(curl -s -X POST "http://<CRAPI_DOMAIN>/identity/api/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"tu@email.com","password":"TuPassword1!"}' | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])")
+
+# Intentar acceder al vehículo de otro usuario cambiando el vehicle_id
+curl -i "http://<CRAPI_DOMAIN>/community/api/v2/vehicle/<vehicle_id_ajeno>/location" \
+  -H "Authorization: Bearer $TOKEN"
+# Sin API Protection: 200 con datos del vehículo ajeno
+# Con API Protection activa: bloqueado o auditado según reglas
+```
+
+### 3. SSRF + OpenAPI Validation (OWASP API7) — demo oficial F5
+
+Este es el caso de uso de referencia de F5 XC con crAPI:
+
+```bash
+# Ataque SSRF: crAPI hace una petición HTTP a la URL que le pasas
+curl -X POST "http://<CRAPI_DOMAIN>/workshop/api/merchant/contact_mechanic" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mechanic_code": "TRAC_JME",
+    "problem_details": "SSRF test",
+    "repeat_request": true,
+    "number_of_repeats": 1,
+    "mechanic_api": "http://www.google.com"
+  }'
+# Sin protección: crAPI hace GET a google.com desde el servidor
+# Con API Protection + OpenAPI Validation: bloqueado — el contrato no permite URLs arbitrarias
+```
+
+**Para activar la mitigación en XC:**
+1. Descargar el OpenAPI de crAPI y editar el campo `mechanic_api` para restringirlo a un patrón de URL válida.
+2. Subir el OpenAPI al LB de F5 XC como `api_definition`.
+3. Habilitar `validation_all_spec_endpoints` con `enforcement_block = true`.
+4. Volver a lanzar el ataque SSRF — XC bloqueará la request que no cumple el contrato.
+
+### 4. Unrestricted Resource Consumption — rate limiting (OWASP API4)
+
+```bash
+# Flood sobre un endpoint pesado de crAPI
+for i in $(seq 1 100); do
+  curl -s -o /dev/null -w "%{http_code}\n" \
+    -H "Authorization: Bearer $TOKEN" \
+    "http://<CRAPI_DOMAIN>/community/api/v2/community/posts/recent"
+done | sort | uniq -c
+# Con rate limiting configurado en XC: respuestas 429 tras el umbral
+```
+
+### 5. Broken Authentication — token inválido / expirado (OWASP API2)
+
+```bash
+curl -i "http://<CRAPI_DOMAIN>/workshop/api/me" \
+  -H "Authorization: Bearer token_invalido"
+# Esperado sin WAF: 401 de la app
+# Con WAF en modo blocking + firma de token manipulation: puede resultar en bloqueo previo
+```
+
+### Resumen de capacidades por tipo de prueba
+
+| Tipo de prueba                     | crAPI    | Notas                                                                  |
+| ---------------------------------- | :------: | ---------------------------------------------------------------------- |
+| API Discovery (inventario)         | ✅ Ideal  | Múltiples rutas REST reales — XC construye inventario completo         |
+| BOLA / IDOR (OWASP API1)           | ✅ Ideal  | Vulnerabilidad real por diseño                                          |
+| SSRF + OpenAPI Validation (API7)   | ✅ Ideal  | Caso de referencia oficial de F5 XC con crAPI                          |
+| Rate limiting / abuso de API (API4)| ✅ Ideal  | Endpoints sin throttling por diseño                                     |
+| Broken Auth / token abuse (API2)   | ✅ Válido | Tokens predecibles y sin rotación                                       |
+| WAF clásico (SQLi, XSS)            | ⚠️ Parcial| La app tiene algunos puntos vulnerables pero no módulos didácticos     |
+| OWASP Web Top 10 (formularios)     | ❌ Pobre  | Para eso es **DVWA** (caso 4)                                           |
+
+Los eventos quedan registrados en F5 XC → **Security → Security Events** y **Security → API Security → API Discovery** del namespace correspondiente.
+
+---
+
 ## Ejecución manual
 
 **Archivo de workflow:** `.github/workflows/f5xc-api-ce-eks-apply.yml`

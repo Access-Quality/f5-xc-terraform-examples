@@ -64,6 +64,28 @@ Despliega una **aplicación distribuida multi-cloud** donde los microservicios d
 
 ---
 
+### Guía de Pruebas de Seguridad por Aplicación
+
+Cada caso de uso incluye una aplicación diferente. La siguiente tabla resume qué tipo de pruebas encajan mejor con cada una:
+
+| Tipo de prueba                             | Arcadia Finance (caso 1) | DVWA (caso 4) | Online Boutique (casos 2 y 3) | crAPI (caso 5) |
+| ------------------------------------------ | :----------------------: | :-----------: | :---------------------------: | :------------: |
+| WAF — SQLi, XSS, Command Injection         | ✅                        | ✅ Ideal       | ⚠️ Limitado                   | ⚠️ Parcial     |
+| WAF — File upload / RCE                    | ❌                        | ✅ Ideal       | ❌                             | ❌              |
+| WAF — Brute force de login                 | ✅                        | ✅ Ideal       | ⚠️                            | ✅              |
+| Bot Defense (credential stuffing)          | ✅ Ideal                  | ✅ Válido      | ⚠️ Limitado                   | ✅ Válido       |
+| API Discovery (inventario de endpoints)    | ✅ Ideal                  | ❌             | ❌                             | ✅ Ideal        |
+| API Protection (validación OpenAPI)        | ✅ Ideal                  | ❌             | ❌                             | ✅ Ideal        |
+| SSRF + OpenAPI Validation                  | ❌                        | ❌             | ❌                             | ✅ Ideal        |
+| BOLA / IDOR (OWASP API Top 10)             | ❌                        | ❌             | ❌                             | ✅ Ideal        |
+| Rate limiting / abuso de API               | ✅ Válido                 | ✅ Válido      | ✅ Ideal                       | ✅ Ideal        |
+| DDoS L7 (flood HTTP)                       | ✅ Válido                 | ✅ Válido      | ✅ Ideal                       | ✅ Válido       |
+| OWASP Web Top 10 (módulos didácticos)      | ❌                        | ✅ Ideal       | ❌                             | ❌              |
+
+> Cada README de caso incluye una sección **"Pruebas de seguridad"** con ejemplos curl específicos para la aplicación correspondiente.
+
+---
+
 ### Archivos de Flujo de Trabajo
 
 | **Workflow**                               | **Capacidades**                          | **Guía**                                                         |

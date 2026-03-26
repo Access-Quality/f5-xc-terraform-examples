@@ -381,6 +381,17 @@ Para obtener el `PHPSESSID`, hacer login en DVWA desde el navegador y copiar la 
 
 Los eventos de bloqueo quedan registrados en F5 XC → **Security → Security Events** del namespace correspondiente.
 
+### ¿Para qué sirve DVWA con F5 XC y qué NO sirve?
+
+| Tipo de prueba                                | DVWA     | Notas                                                                                    |
+| --------------------------------------------- | :------: | ---------------------------------------------------------------------------------------- |
+| SQLi, XSS, CSRF, Command Injection            | ✅ Ideal  | Módulos dedicados por vector — perfecto para demostrar WAF OWASP Top 10                 |
+| File upload malicioso / RCE                   | ✅ Ideal  | Módulo de file upload con bypass de extensión y MIME type                                |
+| Brute force de login                          | ✅ Ideal  | Módulo específico de fuerza bruta en el login                                            |
+| Bot Defense (credential stuffing)             | ✅ Válido | Cualquier cliente sin JS es bloqueado en el endpoint de login                            |
+| DDoS L7 / rate limiting                       | ✅ Válido | Sirve como target para flood HTTP                                                        |
+| API Discovery / API Protection                | ❌ Pobre  | DVWA no expone APIs REST reales; el módulo `vulnerabilities/api` requiere Composer y es limitado. Para API Discovery/Protection usar **Arcadia Finance** (caso 1) o **crAPI** (caso 5) |
+
 ---
 
 ## Destroy del laboratorio

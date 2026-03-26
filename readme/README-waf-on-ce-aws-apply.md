@@ -546,3 +546,52 @@ terraform_infra        (4° — elimina VPC, subnets, IGW, Security Groups)
 ```
 
 > El recurso `volterra_cloud_credentials` incluye un `destroy provisioner` con `sleep 90` para que F5 XC tenga tiempo de eliminar el AWS VPC Site antes de intentar borrar las credenciales (evita error 409).
+
+---
+
+## Pruebas de seguridad — Online Boutique con F5 XC WAF
+
+Online Boutique es una app cloud-native de e-commerce con frontend HTTP y ~10 microservicios internos en gRPC. Las pruebas de WAF se aplican sobre la superficie HTTP pública del frontend.
+
+### ¿Para qué sirve Online Boutique con F5 XC y qué NO sirve?
+
+| Tipo de prueba                          | Online Boutique | Notas                                                                                                       |
+| --------------------------------------- | :-------------: | ----------------------------------------------------------------------------------------------------------- |
+| WAF general (frontend HTTP)             | ✅ Válido        | Protección de la superficie HTTP del frontend: rutas de catálogo, carrito, checkout                         |
+| DDoS L7 / rate limiting                 | ✅ Ideal         | Tráfico realista de e-commerce — flood sobre `/` o rutas de producto                                        |
+| XSS en parámetros HTTP                  | ✅ Válido        | La app no filtra inputs — WAF puede demostrar bloqueo                                                       |
+| SQLi / Command Injection                | ⚠️ Limitado     | La app no tiene formularios vulnerables por diseño — WAF bloquea pero la app tampoco sería vulnerable        |
+| API Discovery / API Protection          | ❌ Pobre         | Los microservicios se comunican internamente por gRPC, no como APIs REST públicas. Para API Security usar **crAPI** (caso 5) o **Arcadia Finance** (caso 1) |
+| OWASP Top 10 dirigidos (módulos)        | ❌ No aplica     | La app no tiene módulos de vulnerabilidades didácticas — para eso es **DVWA** (caso 4)                      |
+
+### Pruebas de WAF con curl
+
+```bash
+# XSS en parámetro de búsqueda de productos
+curl -i "http://<BOUTIQUE_DOMAIN>/?q=<script>alert(document.cookie)</script>"
+# Esperado: 403 + Request Rejected
+
+# SQLi en ruta de producto
+curl -i "http://<BOUTIQUE_DOMAIN>/product/1' OR '1'='1"
+# Esperado: 403 + Request Rejected
+
+# Path traversal
+curl -i "http://<BOUTIQUE_DOMAIN>/../../../../etc/passwd"
+# Esperado: 403 + Request Rejected
+
+# Scanner User-Agent (requiere Bot Defense o signature de scanner)
+curl -i "http://<BOUTIQUE_DOMAIN>/" \
+  -H "User-Agent: sqlmap/1.7.8#stable (https://sqlmap.org)"
+```
+
+### Simulación de DDoS L7 (flood básico)
+
+```bash
+# Generar 200 requests seguidos contra el frontend
+for i in $(seq 1 200); do
+  curl -s -o /dev/null -w "%{http_code}\n" "http://<BOUTIQUE_DOMAIN>/"
+done | sort | uniq -c
+# Con rate limiting activo en XC: respuestas 429 deberían aparecer tras el umbral
+```
+
+Los eventos de bloqueo quedan registrados en F5 XC → **Security → Security Events** del namespace correspondiente.
