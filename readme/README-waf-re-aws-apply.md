@@ -29,9 +29,17 @@ Internet
 ┌─────────────────────────────────────────────────────────┐
 │          F5 Distributed Cloud — Regional Edge (RE)       │
 │                                                          │
-│  • WAF inspection (block/detect mode)                   │
 │  • HTTP Load Balancer                                   │
 │  • advertise_on_public_default_vip = true               │
+│                                                          │
+│  • WAF inspection (block/detect mode)                   │
+│      └─ OWASP Top 10, SQLi, XSS, Path Traversal        │
+│                                                          │
+│  • API Discovery (aprendizaje pasivo de endpoints)      │
+│                                                          │
+│  • API Protection (OpenAPI schema enforcement)          │
+│      ├─ Bloquea endpoints no documentados en swagger    │
+│      └─ Valida tipos de datos por campo (int, string…)  │
 └─────────────────────────────────────────────────────────┘
                            │
                            │  Forward (origin pool → public IP del EC2)
@@ -42,7 +50,7 @@ Internet
 │  ┌───────────────────────────────────────────────────┐  │
 │  │  EC2 Instance (Amazon Linux 2)                    │  │
 │  │                                                    │  │
-│  │  Elastic IP (public)                              │  │
+│  │  Elastic IP (public, puerto 8080 abierto)         │  │
 │  │      │                                            │  │
 │  │      ▼                                            │  │
 │  │  Arcadia Finance (Docker Compose — userdata.sh)   │  │
