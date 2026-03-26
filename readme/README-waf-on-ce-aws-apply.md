@@ -267,6 +267,7 @@ Configurar en **Settings → Secrets and variables → Variables**:
 | ----------------- | ---------------------- | --------------------------------------------- |
 | `XC_NAMESPACE`    | `boutique-prod`        | Namespace de F5 XC donde se crea el LB y WAF  |
 | `BOUTIQUE_DOMAIN` | `boutique.example.com` | FQDN de la aplicación en el HTTP LB de F5 XC  |
+| `XC_WAF_BLOCKING` | `false`                | Modo WAF: `true` = bloqueo, `false` = monitoreo (default recomendado) |
 
 ---
 
@@ -337,7 +338,7 @@ Crea o actualiza los cuatro workspaces en Terraform Cloud vía la API REST:
   | `TF_VAR_advertise_sites`         | `true`   | Usa `advertise_custom` (solo en CE Site, no en RE global)           |
   | `TF_VAR_ip_address_on_site_pool` | `true`   | Origin pool: `private_ip` con la IP del nodo EKS                   |
   | `TF_VAR_http_only`               | `true`   | HTTP port 80 (sin HTTPS, sin auto-cert, sin delegación DNS)         |
-  | `TF_VAR_xc_waf_blocking`         | `true`   | WAF en modo **blocking** (los ataques reciben HTTP 403)             |
+  | `TF_VAR_xc_waf_blocking`         | `XC_WAF_BLOCKING` (var) | Modo WAF: `true` = bloqueo (HTTP 403), `false` = monitoreo (solo log) |
   | `TF_VAR_serviceport`             | `30019`  | NodePort del servicio `frontend` de Online Boutique                 |
 
 - **Pre-step especial:** la llave SSH pública se deriva de la privada en runtime con `ssh-keygen -y` e inyectada como `TF_VAR_ssh_key` vía `$GITHUB_ENV`. El cert/key del P12 se extrae con `openssl pkcs12 -legacy` (compatible con OpenSSL 3.x) y se eliminan inmediatamente después (`rm -f /tmp/client.crt /tmp/client.key`).
@@ -421,12 +422,115 @@ flowchart LR
 3. Hacer clic en **Run workflow**.
 4. Confirmar la ejecución. No hay inputs adicionales.
 
+> **Tiempo estimado de ejecución: ~32 minutos** desde que se dispara el workflow hasta que todos los jobs finalizan en `success`. Una vez completado, espera **25 minutos adicionales** para que el CE Site quede en estado `ONLINE` en F5 XC y el HTTP Load Balancer comience a servir tráfico. El proceso más largo es el aprovisionamiento del Customer Edge en AWS (`volt_mesh_site_deploy`), que incluye la creación de la instancia EC2, el registro del CE en F5 XC y la validación de conectividad.
+
 ### Criterios de éxito
 
 - Los cinco jobs terminan en estado `success` (`setup_tfc_workspaces`, `terraform_infra`, `terraform_eks_creation`, `Boutique_app_deploy`, `volt_mesh_site_deploy`).
 - El namespace indicado en `XC_NAMESPACE` existe en la consola de F5 XC.
 - El HTTP Load Balancer aparece publicado en el AWS CE Site.
 - La aplicación Online Boutique es accesible desde internet a través del dominio configurado en `BOUTIQUE_DOMAIN`.
+
+---
+
+## Pruebas de seguridad — Rate Limiting y DDoS L7
+
+Una vez desplegado el entorno, puedes validar las capacidades de protección del WAF usando el script incluido en el repositorio.
+
+### Script: `herramientas/test_ddos.sh`
+
+El script ejecuta tres pruebas contra el dominio configurado en `BOUTIQUE_DOMAIN`:
+
+| Test | Qué simula | Detección esperada |
+|---|---|---|
+| **Rate Limit** | Burst de 300 requests con concurrencia 60 desde una sola IP | HTTP `429` o `403` al superar el umbral de rate limiting |
+| **HTTP Flood L7** | 200 conexiones concurrentes durante 30 segundos (DDoS L7) | La app sigue respondiendo; el WAF absorbe el flood |
+| **API Abuse** | 100 requests consecutivos a un endpoint con User-Agent sospechoso | HTTP `429` o `403` por política de abuso de API |
+
+### Requisitos previos
+
+```bash
+# Instalar hey (generador de carga HTTP) — macOS
+brew install hey
+```
+
+### Uso
+
+```bash
+chmod +x herramientas/test_ddos.sh
+./herramientas/test_ddos.sh http://<BOUTIQUE_DOMAIN>
+```
+
+Ejemplo:
+
+```bash
+./herramientas/test_ddos.sh http://boutique.example.com
+```
+
+### Resultados reales de ejecución
+
+#### Run 1 — WAF en modo monitoreo (`XC_WAF_BLOCKING=false`, sin Rate Limiting)
+
+Todos los requests pasaron con `200`. El WAF registró el tráfico en Security Events pero no bloqueó nada. Resultados esperados en este modo:
+
+| Test | Resultado | Detalle |
+|---|---|---|
+| Rate Limit | ⚠ WARN | 300/300 `200` — sin Rate Limit Policy configurada |
+| HTTP Flood | ✓ PASS | 1852 `200` en 30 s — app operativa, latencia p99: 5.4 s |
+| API Abuse | ⚠ WARN | 100/100 `200` — rate limiting no activo |
+
+#### Run 2 — Rate Limiting activo en F5 XC (configurado en el HTTP LB)
+
+Con Rate Limit Policy habilitada en el HTTP Load Balancer de F5 XC:
+
+| Test | Resultado | Detalle |
+|---|---|---|
+| Rate Limit | ✓ PASS | **193/300 bloqueados con `429`** (64%) — umbral alcanzado tras ~107 req |
+| HTTP Flood | ✓ PASS | **27,865/27,915 bloqueados con `429`** (>99.8%) — 924 req/s procesados, latencia p99: 0.6 s |
+| API Abuse | ✓ PASS | **57/100 bloqueados con `429`** — patrón token bucket: `429`/`200` alternados |
+
+```
+==========================================
+ Target: http://boutique.digitalvs.com
+==========================================
+
+=== TEST 1: Rate Limit — 300 requests, concurrencia 60 ===
+
+  Requests/sec: 61.2756
+  Status code distribution:
+    [200] 107 responses
+    [429] 193 responses
+
+✓ PASS: El WAF bloqueó requests por rate limiting
+
+=== TEST 2: HTTP Flood — concurrencia 200 durante 30 segundos ===
+
+  Requests/sec: 924.1411
+  Status code distribution:
+    [200]  50 responses
+    [429] 27865 responses
+
+✓ PASS: La aplicación sobrevivió el flood — WAF operativo
+
+=== TEST 3: API Abuse — 100 requests con User-Agent sospechoso ===
+
+  Total bloqueados: 57/100
+✓ PASS: WAF bloqueó 57 requests de abuso de API
+
+==========================================
+ Pruebas finalizadas
+ Revisa los eventos en F5 XC Console:
+ Security → App Firewall → Security Events
+==========================================
+```
+
+### Notas importantes
+
+> **Rate limiting no está habilitado por defecto** en F5 XC al desplegar con este workflow. La variable `TF_VAR_xc_waf_blocking = true` activa la política WAF (OWASP), pero el rate limiting requiere configurar una **Rate Limit Policy** en el HTTP Load Balancer desde la consola de F5 XC o via Terraform. Si el Test 1 devuelve `WARN`, agrega la política de rate limiting en el recurso `volterra_http_loadbalancer` del módulo `waf-ce-k8s-aws/xc`.
+
+> **IP de origen**: al ejecutar desde tu máquina local, el WAF aplica las políticas sobre tu IP pública. Si te bloqueas, espera que expire el rate limit window (generalmente 1 minuto) o verifica el estado en **F5 XC Console → Security → App Firewall → Security Events**.
+
+> **Diferencia con GitHub Actions**: en el workflow CI, los tests se ejecutan desde la IP del runner de GitHub. Localmente, el tráfico proviene de tu IP, lo que puede producir comportamientos distintos si el WAF tiene reglas basadas en reputación de IP.
 
 ---
 
@@ -564,25 +668,29 @@ Online Boutique es una app cloud-native de e-commerce con frontend HTTP y ~10 mi
 | API Discovery / API Protection          | ❌ Pobre         | Los microservicios se comunican internamente por gRPC, no como APIs REST públicas. Para API Security usar **crAPI** (caso 5) o **Arcadia Finance** (caso 1) |
 | OWASP Top 10 dirigidos (módulos)        | ❌ No aplica     | La app no tiene módulos de vulnerabilidades didácticas — para eso es **DVWA** (caso 4)                      |
 
-### Pruebas de WAF con curl
+### Pruebas de WAF OWASP con curl (`XC_WAF_BLOCKING=true`)
+
+Con el WAF en modo bloqueo, los siguientes payloads deben retornar **HTTP 403**:
 
 ```bash
 # XSS en parámetro de búsqueda de productos
-curl -i "http://<BOUTIQUE_DOMAIN>/?q=<script>alert(document.cookie)</script>"
-# Esperado: 403 + Request Rejected
+curl -i "http://boutique.digitalvs.com/?q=<script>alert(document.cookie)</script>"
+# Esperado con blocking: 403 + Request Rejected
 
 # SQLi en ruta de producto
-curl -i "http://<BOUTIQUE_DOMAIN>/product/1' OR '1'='1"
-# Esperado: 403 + Request Rejected
+curl -i "http://boutique.digitalvs.com/?id=1'+OR+'1'='1"
+# Esperado con blocking: 403 + Request Rejected
 
 # Path traversal
 curl -i "http://<BOUTIQUE_DOMAIN>/../../../../etc/passwd"
-# Esperado: 403 + Request Rejected
+# Esperado con blocking: 403 + Request Rejected
 
 # Scanner User-Agent (requiere Bot Defense o signature de scanner)
 curl -i "http://<BOUTIQUE_DOMAIN>/" \
   -H "User-Agent: sqlmap/1.7.8#stable (https://sqlmap.org)"
 ```
+
+> Con `XC_WAF_BLOCKING=false` (modo monitoreo), estos requests reciben `200` y la app los procesa — el WAF solo los registra en Security Events sin bloquear.
 
 ### Simulación de DDoS L7 (flood básico)
 

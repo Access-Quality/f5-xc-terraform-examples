@@ -1,4 +1,4 @@
-name: "WAF on CE AWS - Destroy"
+name: "WAF en CE AWS - Destroy"
 
 on:
   workflow_dispatch:

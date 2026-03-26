@@ -1,4 +1,4 @@
-name: "WAF on CE AWS - Deploy"
+name: "WAF en CE AWS - Deploy"
 # Deploys resources in order: AWS Infra → EKS Cluster → Boutique App → F5XC WAF.
 # TFC workspaces are created automatically by the setup_tfc_workspaces job via
 # the Terraform Cloud API. Each workspace is configured with Execution Mode
@@ -344,7 +344,7 @@ jobs:
       TF_VAR_advertise_sites: "true"
       TF_VAR_ip_address_on_site_pool: "true"
       TF_VAR_http_only: "true"
-      TF_VAR_xc_waf_blocking: "true"
+      TF_VAR_xc_waf_blocking: ${{ vars.XC_WAF_BLOCKING }}
       TF_VAR_serviceport: "30019"
       TF_VAR_aws_access_key: ${{ secrets.AWS_ACCESS_KEY }}
       TF_VAR_aws_secret_key: ${{ secrets.AWS_SECRET_KEY }}
