@@ -89,7 +89,7 @@ resource "volterra_http_loadbalancer" "lb_https" {
     for_each = var.xc_bot_defense ? [1] : []
     content {
       policy {
-        javascript_mode   = "Sync JS with no Caching"
+        javascript_mode   = "SYNC_JS_NO_CACHING"
         disable_js_insert = false
         js_insert_all_pages {
           javascript_location = "AFTER_HEAD"
