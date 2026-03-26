@@ -1,4 +1,4 @@
-name: "WAF en RE para VM en AWS - Deploy"
+name: "API - WAF en RE para VM en AWS - Deploy"
 
 # IMPORTANT: The three Terraform Cloud workspaces used by this workflow
 # (INFRA, VM, XC) must be configured with execution mode "Local" so that

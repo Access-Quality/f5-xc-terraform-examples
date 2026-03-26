@@ -1,4 +1,4 @@
-name: "WAF en RE para VM en AWS - Destroy"
+name: "API - WAF en RE para VM en AWS - Destroy"
 
 # IMPORTANT: The three Terraform Cloud workspaces used by this workflow
 # (INFRA, VM, XC) must be configured with execution mode "Local" so that
@@ -26,6 +26,7 @@ jobs:
       TF_VAR_xc_waf_blocking:          ${{ vars.XC_WAF_BLOCKING }}
       TF_VAR_xc_api_spec:              '[]'
       VES_P12_PASSWORD:                ${{ secrets.XC_P12_PASSWORD }}
+      VOLT_API_P12_FILE:               api.p12
     steps:
       - name: Checkout
         uses: actions/checkout@v4
