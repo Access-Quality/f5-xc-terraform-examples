@@ -313,12 +313,14 @@ Navegar a `http://<ARCADIA_DOMAIN>/trading/login.php` en el navegador e iniciar 
 
 ### Credenciales verificadas
 
-| Usuario | Contraseña | Acceso       |
-| ------- | ---------- | ------------ |
-| `matt`  | `ilovef5`  | ✅ Funciona  |
-| `jim`   | `ilovef5`  | ✅ Funciona  |
-| `anna`  | `ilovef5`  | ✅ Funciona  |
-| `admin` | `iloveblue`| ❌ No válido |
+| Usuario | Contraseña  | Acceso                                      |
+| ------- | ----------- | ------------------------------------------- |
+| `matt`  | `ilovef5`   | ✅ Funciona — redirige a `index.php`         |
+| `jim`   | `ilovef5`   | ❌ No válido — redirige de vuelta a `login.php` |
+| `anna`  | `ilovef5`   | ❌ No válido — redirige de vuelta a `login.php` |
+| `admin` | `iloveblue` | ❌ No válido — redirige de vuelta a `login.php` |
+
+> **Nota:** Solo el usuario `matt` existe en la imagen Docker de Arcadia Finance incluida en este despliegue. El resto de usuarios referenciados en otras versiones de la app no están presentes en esta imagen.
 
 ### Probar el login con curl
 
@@ -345,16 +347,78 @@ curl -s "http://<ARCADIA_DOMAIN>/api/side_bar_accounts.php" \
 
 Arcadia Finance expone una API REST y una interfaz web con los siguientes endpoints confirmados:
 
-| Endpoint                                      | Método | Descripción                                      |
-| --------------------------------------------- | ------ | ------------------------------------------------ |
-| `/trading/login.php`                          | GET    | Página principal de login                        |
-| `/trading/auth.php`                           | POST   | Autenticación (form-urlencoded), devuelve cookie |
-| `/trading/rest/buy_stocks.php`                | POST   | Compra de acciones (requiere sesión)             |
-| `/trading/rest/sell_stocks.php`               | POST   | Venta de acciones (requiere sesión)              |
-| `/api/rest/execute_money_transfer.php`        | POST   | Transferencia de dinero entre usuarios           |
-| `/api/lower_bar.php`                          | GET    | Barra inferior con datos de cuentas              |
-| `/api/side_bar.php`                           | GET    | Panel lateral con formulario de transferencia    |
-| `/api/side_bar_accounts.php`                  | GET    | Lista de cuentas del usuario                     |
+| Endpoint                                      | Método | En swagger | Descripción                                                               |
+| --------------------------------------------- | ------ | :--------: | ------------------------------------------------------------------------- |
+| `/trading/login.php`                          | GET    | —          | Página principal de login (no pasa por API Protection)                    |
+| `/trading/auth.php`                           | POST   | —          | Autenticación (form-urlencoded), devuelve cookie de sesión                |
+| `/trading/rest/portfolio.php`                 | GET    | ✅         | Portfolio del usuario (requiere sesión)                                   |
+| `/trading/rest/buy_stocks.php`                | POST   | ✅         | Compra de acciones (requiere sesión)                                      |
+| `/trading/rest/sell_stocks.php`               | POST   | ✅         | Venta de acciones (requiere sesión)                                       |
+| `/trading/transactions.php`                   | GET    | ✅         | Historial de transacciones del usuario                                    |
+| `/api/rest/execute_money_transfer.php`        | POST   | ✅         | Transferencia de dinero — campos `amount` y `account` deben ser integers  |
+| `/api/lower_bar.php`                          | GET    | ✅         | Barra inferior con datos de cuentas                                       |
+| `/api/side_bar.php`                           | GET    | ✅         | Panel lateral con formulario de transferencia                             |
+| `/api/side_bar_accounts.php`                  | GET    | ✅         | Lista de cuentas del usuario                                              |
+| `/api/side_bar_table.php`                     | GET    | ❌         | Tabla de tarjetas — **bloqueado por API Protection** (no está en swagger) |
+
+### Acceso directo a la aplicación (sin pasar por F5 XC)
+
+El Security Group del EC2 tiene el puerto `8080` abierto a `0.0.0.0/0`. Esto permite acceder a Arcadia Finance directamente usando la Elastic IP de la instancia, **sin pasar por el RE de F5 XC ni por la WAF**:
+
+```
+http://<ELASTIC_IP_EC2>:8080/trading/login.php
+```
+
+La Elastic IP se puede obtener desde la consola de AWS → EC2 → Instancias, o desde los outputs del workspace `TF_CLOUD_WORKSPACE_AWS_VM` en Terraform Cloud.
+
+Con acceso directo:
+- La WAF **no inspecciona** el tráfico — los ataques llegan directamente a la aplicación.
+- La API Protection **no aplica** — todos los endpoints responden sin validación de schema.
+- El acceso directo sirve para confirmar que la aplicación funciona correctamente de forma aislada.
+
+> **Implicación de seguridad:** En este escenario el EC2 tiene IP pública y puertos abiertos, por lo que la protección de F5 XC es fácilmente bypasseable. Para forzar que todo el tráfico pase por F5 XC, la alternativa es mover la app a una subred privada y usar el modelo RE + AppConnect (caso 4 de este repositorio).
+
+---
+
+### Comportamiento conocido de API Protection
+
+Con API Protection activa, F5 XC valida cada request contra el swagger de Arcadia Finance. Se han identificado los siguientes comportamientos:
+
+#### Endpoint no documentado — `side_bar_table.php` bloqueado
+
+La UI de Arcadia llama a `/api/side_bar_table.php` para cargar la tabla de tarjetas/cuentas del usuario. Este endpoint **no está en el swagger**, por lo que API Protection lo bloquea con 403. Consecuencia visible: al hacer clic en una tarjeta o en el botón **Make Payment**, la UI no responde (el endpoint que carga los datos fue bloqueado antes de que el frontend lograra completar la operación).
+
+```bash
+# Confirmar bloqueo
+curl -s -b /tmp/arcadia_cookies.txt \
+  "http://<ARCADIA_DOMAIN>/api/side_bar_table.php" \
+  -w "\nHTTP: %{http_code}\n"
+# Resultado: HTTP: 403  →  Request Rejected (sp4-sao)
+```
+
+#### Validación de tipos — transferencia bloqueada desde el browser
+
+El swagger define `amount` y `account` como `type: integer`. El formulario HTML de Arcadia los envía como **strings** (comportamiento estándar de los formularios web). API Protection rechaza con 403 cualquier request donde esos campos sean strings.
+
+```bash
+# Con integers → 200 OK
+curl -s -b /tmp/arcadia_cookies.txt \
+  -X POST "http://<ARCADIA_DOMAIN>/api/rest/execute_money_transfer.php" \
+  -H "Content-Type: application/json" \
+  -d '{"amount":10,"account":2075894,"currency":"EUR","friend":"Vincent"}' \
+  -w "\nHTTP: %{http_code}\n"
+
+# Con strings → 403 Bloqueado
+curl -s -b /tmp/arcadia_cookies.txt \
+  -X POST "http://<ARCADIA_DOMAIN>/api/rest/execute_money_transfer.php" \
+  -H "Content-Type: application/json" \
+  -d '{"amount":"10","account":"2075894","currency":"EUR","friend":"Vincent"}' \
+  -w "\nHTTP: %{http_code}\n"
+```
+
+Esto demuestra que API Protection puede causar falsos positivos cuando el swagger no refleja exactamente el comportamiento real del cliente. La solución es ajustar el swagger para aceptar ambos tipos (`oneOf: [integer, string]`) o corregir el JavaScript del frontend.
+
+---
 
 ### Pruebas de seguridad con el WAF
 
@@ -457,7 +521,8 @@ curl -i "http://<ARCADIA_DOMAIN>/" \
 | Scanner User-Agent | ⚠️ Requiere Bot Defense habilitado |
 | Credential stuffing | ⚠️ Requiere Bot Defense habilitado |
 | BOLA / endpoint no documentado | ✅ Bloqueado — API Protection enforcea el swagger OpenAPI |
-| Schema validation (tipo de dato) | ✅ Bloqueado — el swagger define tipos por campo |
+| Schema validation (tipo de dato) | ✅ Bloqueado — `amount`/`account` enviados como string desde el browser |
+| Endpoint shadow no documentado (`side_bar_table.php`) | ✅ Bloqueado — la UI no puede cargar tarjetas ni ejecutar Make Payment |
 
 Los eventos de bloqueo quedan registrados en F5 XC → **Security → Security Events** del namespace configurado en `XC_NAMESPACE`.
 
