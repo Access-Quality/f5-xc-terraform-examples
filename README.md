@@ -8,9 +8,9 @@ Ejemplos de despliegues de F5 Distributed Cloud (XC) utilizando Terraform. Los s
 
 ## Casos de Uso
 
-### 1. API + WAF en RE (Aplicación en AWS) — `waf-re-aws-apply.yml`
+### 1. API + WAF + Bot Defense en RE (Aplicación en AWS) — `waf-re-aws-apply.yml`
 
-Despliega un **Web Application Firewall (WAF) y seguridad de APIs sobre el Regional Edge (RE) de F5 Distributed Cloud**, protegiendo la aplicación **Arcadia Finance** que corre en una instancia EC2 dentro de un VPC en AWS. El tráfico de internet pasa por el RE global de F5 XC antes de llegar a la aplicación, sin necesidad de instalar un Customer Edge en la infraestructura del cliente. El HTTP Load Balancer se publica con una VIP pública en el RE; la WAF policy puede configurarse en modo bloqueo o detección. Adicionalmente, se activa **API Discovery** (detección automática de endpoints) y **API Protection** (validación contra esquema OpenAPI de Arcadia Finance), bloqueando cualquier llamada a endpoints no documentados.
+Despliega un **Web Application Firewall (WAF), API Protection y Bot Defense sobre el Regional Edge (RE) de F5 Distributed Cloud**, protegiendo la aplicación **Arcadia Finance** que corre en una instancia EC2 dentro de un VPC en AWS. El tráfico de internet pasa por el RE global de F5 XC antes de llegar a la aplicación, sin necesidad de instalar un Customer Edge en la infraestructura del cliente. El HTTP Load Balancer se publica con una VIP pública en el RE; la WAF policy puede configurarse en modo bloqueo o detección. Adicionalmente, se activa **API Discovery** (detección automática de endpoints), **API Protection** (validación contra esquema OpenAPI de Arcadia Finance) y **Bot Defense** (bloqueo de clientes automatizados sin ejecución de JavaScript en el endpoint de login).
 
 👉 [Ver guía completa](readme/README-waf-re-aws-apply.md)
 
@@ -68,7 +68,7 @@ Despliega una **aplicación distribuida multi-cloud** donde los microservicios d
 
 | **Workflow**                               | **Capacidades**                          | **Guía**                                                         |
 | ------------------------------------------ | ---------------------------------------- | ----------------------------------------------------------------- |
-| `waf-re-aws-apply.yml`                     | WAF + API Discovery + API Protection     | [README](readme/README-waf-re-aws-apply.md)                       |
+| `waf-re-aws-apply.yml`                     | WAF + API Discovery + API Protection + Bot Defense | [README](readme/README-waf-re-aws-apply.md)                       |
 | `waf-on-ce-aws-apply.yml`                  | WAF en CE                                | [README](readme/README-waf-on-ce-aws-apply.md)                    |
 | `waf-on-ce-az-apply.yml`                   | WAF en CE                                | [README](readme/README-waf-on-ce-az-apply.md)                     |
 | `waf-re-ac-aws-vm-apply.yml`               | WAF en RE + AppConnect                   | [README](readme/README-waf-re-ac-aws-vm-apply.md)                 |
@@ -81,7 +81,7 @@ Despliega una **aplicación distribuida multi-cloud** donde los microservicios d
 ## Historial de Cambios
 
 ### 2026-03-26
-- **API + WAF en RE AWS** (`waf-re-aws-apply.yml` / `waf-re-aws-destroy.yml`): workflows renombrados con prefijo `API -` para reflejar que incluyen **API Discovery** y **API Protection** además de WAF. Se agregó `VOLT_API_P12_FILE` al job `terraform_xc` de ambos workflows (deploy y destroy) para correcta autenticación del provider de F5 XC.
+- **API + WAF + Bot Defense en RE AWS** (`waf-re-aws-apply.yml` / `waf-re-aws-destroy.yml`): workflows renombrados a `API + WAF + BD` para reflejar que incluyen **WAF**, **API Discovery**, **API Protection** y **Bot Defense** (opcional vía variable `XC_BOT_DEFENSE`). Se agregó `VOLT_API_P12_FILE` al job `terraform_xc` de ambos workflows para correcta autenticación del provider de F5 XC.
 
 ### 2026-03-25
 - **WAF on CE Azure** (`waf-on-ce-az-apply.yml` / `waf-on-ce-az-destroy.yml`): la variable de GitHub `APP_DOMAIN` fue renombrada a `BOUTIQUE_DOMAIN` para mayor claridad sobre la aplicación protegida. Actualizar el valor en *Settings → Secrets and variables → Variables* del repositorio.

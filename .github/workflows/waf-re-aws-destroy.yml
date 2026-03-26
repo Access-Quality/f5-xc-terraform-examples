@@ -1,4 +1,4 @@
-name: "API - WAF en RE para VM en AWS - Destroy"
+name: "API + WAF + BD en RE para VM en AWS - Destroy"
 
 # IMPORTANT: The three Terraform Cloud workspaces used by this workflow
 # (INFRA, VM, XC) must be configured with execution mode "Local" so that
