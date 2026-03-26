@@ -307,16 +307,39 @@ flowchart LR
 
 ### Acceso inicial
 
-Navegar a `http://<ARCADIA_DOMAIN>/` en el navegador. La aplicación Arcadia Finance estará disponible directamente — no requiere inicialización manual.
+Navegar a `http://<ARCADIA_DOMAIN>/trading/login.php` en el navegador e iniciar sesión con las credenciales indicadas abajo.
 
-### Credenciales por defecto
+> **Nota:** La aplicación tarda 2-3 minutos en estar disponible tras el deploy, ya que los containers Docker se inicializan vía `userdata.sh` al lanzar la instancia EC2.
 
-| Usuario         | Contraseña  |
-| --------------- | ----------- |
-| `admin`         | `iloveblue` |
-| `matt`          | `ilovef5`   |
-| `jim`           | `ilovef5`   |
-| `anna`          | `ilovef5`   |
+### Credenciales verificadas
+
+| Usuario | Contraseña | Acceso       |
+| ------- | ---------- | ------------ |
+| `matt`  | `ilovef5`  | ✅ Funciona  |
+| `jim`   | `ilovef5`  | ✅ Funciona  |
+| `anna`  | `ilovef5`  | ✅ Funciona  |
+| `admin` | `iloveblue`| ❌ No válido |
+
+### Probar el login con curl
+
+```bash
+# 1. Login y guardar cookie de sesión
+curl -s -X POST "http://<ARCADIA_DOMAIN>/trading/auth.php" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "username=matt&password=ilovef5" \
+  -c /tmp/arcadia_cookies.txt \
+  -D - 2>&1 | grep "location:"
+# Esperado: location: index.php  → login exitoso
+# Si devuelve location: login.php → credenciales incorrectas
+
+# 2. Verificar que la sesión funciona — portfolio del usuario
+curl -s "http://<ARCADIA_DOMAIN>/trading/rest/portfolio.php" \
+  -b /tmp/arcadia_cookies.txt | python3 -m json.tool
+
+# 3. Consultar cuentas disponibles
+curl -s "http://<ARCADIA_DOMAIN>/api/side_bar_accounts.php" \
+  -b /tmp/arcadia_cookies.txt | python3 -m json.tool
+```
 
 ### Módulos y endpoints disponibles
 
