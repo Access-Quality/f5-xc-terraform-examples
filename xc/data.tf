@@ -11,27 +11,27 @@ data "tfe_outputs" "gcp-infra" {
 }
 
 data "tfe_outputs" "bigip" {
-  count = var.vk8s ? 0 : (data.tfe_outputs.infra.0.values.bigip ? 1 : 0)
+  count = var.vk8s ? 0 : (try(data.tfe_outputs.infra[0].values.bigip, false) ? 1 : 0)
   organization = var.tf_cloud_organization
   workspace = "bigip-base"
 }
 data "tfe_outputs" "nap" {
-  count = var.vk8s ? 0 : (data.tfe_outputs.infra.0.values.nap ? 1 : 0)
+  count = var.vk8s ? 0 : (try(data.tfe_outputs.infra[0].values.nap, false) ? 1 : 0)
   organization = var.tf_cloud_organization
   workspace = "nap"
 }
 data "tfe_outputs" "nic" {
-  count = var.vk8s ? 0 : (data.tfe_outputs.infra.0.values.nic ? 1 : 0)
+  count = var.vk8s ? 0 : (try(data.tfe_outputs.infra[0].values.nic, false) ? 1 : 0)
   organization = var.tf_cloud_organization
   workspace = "nic"
 }
 data "tfe_outputs" "aks-cluster" {
-  count = var.vk8s ? 0 : (data.tfe_outputs.infra.0.values.aks-cluster ? 1 : 0)
+  count = var.vk8s ? 0 : (try(data.tfe_outputs.infra[0].values["aks-cluster"], false) ? 1 : 0)
   organization = var.tf_cloud_organization
   workspace    = var.aks_workspace
 }
 data "tfe_outputs" "azure-vm" {
-  count = var.vk8s ? 0 : (data.tfe_outputs.infra.0.values.azure-vm ? 1 : 0)
+  count = var.vk8s ? 0 : (try(data.tfe_outputs.infra[0].values["azure-vm"], false) ? 1 : 0)
   organization = var.tf_cloud_organization
   workspace = "azure-vm"
 }
