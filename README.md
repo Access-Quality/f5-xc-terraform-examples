@@ -66,15 +66,15 @@ Despliega una **aplicación distribuida multi-cloud** donde los microservicios d
 
 ### Archivos de Flujo de Trabajo
 
-| **Workflow**                               | **Guía**                                                              |
-| ------------------------------------------ | --------------------------------------------------------------------- |
-| `waf-re-aws-apply.yml`                     | [README](readme/README-waf-re-aws-apply.md)                           |
-| `waf-on-ce-aws-apply.yml`                  | [README](readme/README-waf-on-ce-aws-apply.md)                        |
-| `waf-on-ce-az-apply.yml`                   | [README](readme/README-waf-on-ce-az-apply.md)                         |
-| `waf-re-ac-aws-vm-apply.yml`               | [README](readme/README-waf-re-ac-aws-vm-apply.md)                     |
-| `f5xc-api-ce-eks-apply.yml`                | [README](readme/README-f5xc-api-ce-eks-apply.md)                      |
-| `teachable-01-mc-networkconnect-apply.yml` | [README](readme/README-teachable-01-mcn-networkconnect-apply.md)      |
-| `bookinfo-smcn-apply.yaml`                 | [README](readme/README-bookinfo-smcn-apply.md)                        |
+| **Workflow**                               | **Capacidades**                          | **Guía**                                                         |
+| ------------------------------------------ | ---------------------------------------- | ----------------------------------------------------------------- |
+| `waf-re-aws-apply.yml`                     | WAF + API Discovery + API Protection     | [README](readme/README-waf-re-aws-apply.md)                       |
+| `waf-on-ce-aws-apply.yml`                  | WAF en CE                                | [README](readme/README-waf-on-ce-aws-apply.md)                    |
+| `waf-on-ce-az-apply.yml`                   | WAF en CE                                | [README](readme/README-waf-on-ce-az-apply.md)                     |
+| `waf-re-ac-aws-vm-apply.yml`               | WAF en RE + AppConnect                   | [README](readme/README-waf-re-ac-aws-vm-apply.md)                 |
+| `f5xc-api-ce-eks-apply.yml`                | API Security + WAF en RE + CE en EKS     | [README](readme/README-f5xc-api-ce-eks-apply.md)                  |
+| `teachable-01-mc-networkconnect-apply.yml` | MCN Network Connect                      | [README](readme/README-teachable-01-mcn-networkconnect-apply.md)  |
+| `bookinfo-smcn-apply.yaml`                 | Multi-cloud + WAF                        | [README](readme/README-bookinfo-smcn-apply.md)                    |
 
 ---
 
