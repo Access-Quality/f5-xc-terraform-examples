@@ -327,14 +327,11 @@ Navegar a `http://<ARCADIA_DOMAIN>/trading/login.php` en el navegador e iniciar 
 
 ### Credenciales verificadas
 
-| Usuario | Contraseña  | Acceso                                      |
-| ------- | ----------- | ------------------------------------------- |
-| `matt`  | `ilovef5`   | ✅ Funciona — redirige a `index.php`         |
-| `jim`   | `ilovef5`   | ❌ No válido — redirige de vuelta a `login.php` |
-| `anna`  | `ilovef5`   | ❌ No válido — redirige de vuelta a `login.php` |
-| `admin` | `iloveblue` | ❌ No válido — redirige de vuelta a `login.php` |
+| Usuario | Contraseña | Acceso                                |
+| ------- | ----------- | ------------------------------------- |
+| `matt`  | `ilovef5`   | ✅ Funciona — redirige a `index.php`   |
 
-> **Nota:** Solo el usuario `matt` existe en la imagen Docker de Arcadia Finance incluida en este despliegue. El resto de usuarios referenciados en otras versiones de la app no están presentes en esta imagen.
+> **Nota:** Solo el usuario `matt` existe en la imagen Docker de Arcadia Finance incluida en este despliegue.
 
 ### Probar el login con curl
 
@@ -561,3 +558,12 @@ terraform_vm     (2° — elimina EC2, Elastic IP, Key Pair)
       ▼
 terraform_infra  (3° — elimina VPC, subredes, SGs, Internet Gateway)
 ```
+
+---
+
+## Archivos de workflow
+
+| Acción   | Archivo                                                                                           |
+| -------- | ------------------------------------------------------------------------------------------------- |
+| Deploy   | [`.github/workflows/waf-re-aws-apply.yml`](../.github/workflows/waf-re-aws-apply.yml)           |
+| Destroy  | [`.github/workflows/waf-re-aws-destroy.yml`](../.github/workflows/waf-re-aws-destroy.yml)       |
