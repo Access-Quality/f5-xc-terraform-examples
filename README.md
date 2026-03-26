@@ -1,3 +1,5 @@
+<img width="2000" height="0" alt="" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7">
+
 # F5 Distributed Cloud -- Ejemplos de Automatización
 
 ## Descripción General
