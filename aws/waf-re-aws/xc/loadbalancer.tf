@@ -102,8 +102,8 @@ resource "volterra_http_loadbalancer" "lb_https" {
           }
           http_methods = ["METHOD_POST"]
           mitigation {
-            block {
-              body = "string:///WW91ciByZXF1ZXN0IHdhcyBibG9ja2VkIGJ5IEJvdCBEZWZlbnNlLgo="
+            flag {
+              no_headers {}
             }
           }
           path {
