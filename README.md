@@ -70,15 +70,15 @@ Despliega una **aplicación distribuida multi-cloud** donde los microservicios d
 
 La siguiente tabla resume la topología de cada caso: dónde se inspecciona el tráfico, si fluye por el Regional Edge global de F5, si se instala un Customer Edge en el entorno del cliente y si la aplicación puede permanecer en una red privada sin IP pública expuesta.
 
-| Caso | Workflow | Aplicación | Pruebas de seguridad | Punto de inspección | Tráfico pasa por RE | CE en cliente | AppConnect (túnel RE→CE) | App sin IP pública | Dónde corre la app | Nube |
-| ---- | -------- | ---------- | :------------------: | ------------------- | :-----------------: | :-----------: | :----------------------: | :----------------: | ------------------ | ---- |
-| 1 | `waf-re-aws-apply.yml` | Arcadia Finance | WAF · API · BD | **RE** (Regional Edge) | ✅ | ❌ | ❌ | ❌ | VM (EC2) | AWS |
-| 2 | `waf-on-ce-aws-apply.yml` | Online Boutique | WAF | **CE** (Customer Edge) | ❌ | ✅ EKS | ❌ | ✅ | Clúster EKS | AWS |
-| 3 | `waf-on-ce-az-apply.yml` | Online Boutique | WAF | **CE** (Customer Edge) | ❌ | ✅ AKS | ❌ | ✅ | Clúster AKS | Azure |
-| 4 | `waf-re-ac-aws-vm-apply.yml` | DVWA | WAF | **RE + CE** | ✅ | ✅ EC2 | ✅ | ✅ | VM (EC2) | AWS |
-| 5 | `f5xc-api-ce-eks-apply.yml` | crAPI | WAF · API | **RE + CE** | ✅ | ✅ CE dentro del clúster EKS | ✅ | ✅ | Clúster EKS | AWS |
-| 6 | `teachable-01-mc-networkconnect-apply.yml` | — (MCN) | — | **CE** (MCN este-oeste) | ✅ Global VN | ✅ AWS + Azure | ❌ | ✅ | VMs en AWS y Azure | AWS + Azure |
-| 7 | `bookinfo-smcn-apply.yaml` | Bookinfo | WAF | **RE + CE** | ✅ | ✅ EKS + AKS | ✅ | ✅ | Clústeres EKS + AKS | AWS + Azure |
+| Caso | Workflow | Nombre del workflow | Aplicación | Pruebas de seguridad | Punto de inspección | Tráfico pasa por RE | CE en cliente | AppConnect (túnel RE→CE) | App sin IP pública | Dónde corre la app | Nube |
+| ---- | -------- | ------------------- | ---------- | :------------------: | ------------------- | :-----------------: | :-----------: | :----------------------: | :----------------: | ------------------ | ---- |
+| 1 | `waf-re-aws-apply.yml` | API + WAF + BD en RE para VM en AWS | Arcadia Finance | WAF · API · BD | **RE** (Regional Edge) | ✅ | ❌ | ❌ | ❌ | VM (EC2) | AWS |
+| 2 | `waf-on-ce-aws-apply.yml` | WAF on CE AWS | Online Boutique | WAF | **CE** (Customer Edge) | ❌ | ✅ EKS | ❌ | ✅ | Clúster EKS | AWS |
+| 3 | `waf-on-ce-az-apply.yml` | WAF en CE AZ | Online Boutique | WAF | **CE** (Customer Edge) | ❌ | ✅ AKS | ❌ | ✅ | Clúster AKS | Azure |
+| 4 | `waf-re-ac-aws-vm-apply.yml` | WAF en RE + AppConnect AWS | DVWA | WAF | **RE + CE** | ✅ | ✅ EC2 | ✅ | ✅ | VM (EC2) | AWS |
+| 5 | `f5xc-api-ce-eks-apply.yml` | API WAF en RE para CE dentro de EKS | crAPI | WAF · API | **RE + CE** | ✅ | ✅ CE dentro del clúster EKS | ✅ | ✅ | Clúster EKS | AWS |
+| 6 | `teachable-01-mc-networkconnect-apply.yml` | Teachable 01-mcn-networkconnect | — (MCN) | — | **CE** (MCN este-oeste) | ✅ Global VN | ✅ AWS + Azure | ❌ | ✅ | VMs en AWS y Azure | AWS + Azure |
+| 7 | `bookinfo-smcn-apply.yaml` | Secure Multi-Cloud Networking | Bookinfo | WAF | **RE + CE** | ✅ | ✅ EKS + AKS | ✅ | ✅ | Clústeres EKS + AKS | AWS + Azure |
 
 > **Pruebas de seguridad:** WAF = Web Application Firewall (SQLi, XSS, RCE…) · API = API Discovery + API Protection · BD = Bot Defense
 
