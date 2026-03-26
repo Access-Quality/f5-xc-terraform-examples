@@ -103,7 +103,7 @@ resource "volterra_http_loadbalancer" "lb_https" {
           http_methods = ["METHOD_POST"]
           mitigation {
             flag {
-              no_headers {}
+              no_headers = true
             }
           }
           path {
