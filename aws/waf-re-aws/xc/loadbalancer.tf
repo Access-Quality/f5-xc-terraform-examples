@@ -67,20 +67,12 @@ resource "volterra_http_loadbalancer" "lb_https" {
       validation_mode {
         validation_mode_active {
           request_validation_properties = ["PROPERTY_QUERY_PARAMETERS", "PROPERTY_PATH_PARAMETERS", "PROPERTY_CONTENT_TYPE", "PROPERTY_COOKIE_PARAMETERS", "PROPERTY_HTTP_HEADERS", "PROPERTY_HTTP_BODY"]
-          enforcement_block             = true
-          enforcement_report            = false
+          enforcement_block             = false
+          enforcement_report            = true
         }
       }
       fall_through_mode {
-        fall_through_mode_custom {
-          open_api_validation_rules {
-            metadata {
-              name = format("%s-fall-through-block-%s", local.project_prefix, local.build_suffix)
-            }
-            action_block = true
-            base_path    = "/api/"
-          }
-        }
+        fall_through_mode_allow = true
       }
     }
   }
