@@ -74,7 +74,7 @@ La siguiente tabla resume la topología de cada caso: dónde se inspecciona el t
 | 2 | `waf-on-ce-aws-apply.yml` | **CE** (Customer Edge) | ❌ | ✅ EKS | ❌ | ✅ | AWS |
 | 3 | `waf-on-ce-az-apply.yml` | **CE** (Customer Edge) | ❌ | ✅ AKS | ❌ | ✅ | Azure |
 | 4 | `waf-re-ac-aws-vm-apply.yml` | **RE + CE** | ✅ | ✅ EC2 | ✅ | ✅ | AWS |
-| 5 | `f5xc-api-ce-eks-apply.yml` | **RE + CE** | ✅ | ✅ EKS | ✅ | ✅ | AWS |
+| 5 | `f5xc-api-ce-eks-apply.yml` | **RE + CE** | ✅ | ✅ CE dentro del clúster EKS | ✅ | ✅ | AWS |
 | 6 | `teachable-01-mc-networkconnect-apply.yml` | **CE** (MCN este-oeste) | ✅ Global VN | ✅ AWS + Azure | ❌ | ✅ | AWS + Azure |
 | 7 | `bookinfo-smcn-apply.yaml` | **RE + CE** | ✅ | ✅ EKS + AKS | ✅ | ✅ | AWS + Azure |
 
