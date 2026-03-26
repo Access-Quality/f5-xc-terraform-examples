@@ -1,6 +1,6 @@
 # API + WAF + Bot Defense en RE para VM en AWS - Deploy
 
-Este workflow despliega una solución de **Web Application Firewall (WAF), API Protection y Bot Defense con F5 Distributed Cloud sobre el Regional Edge (RE)**, protegiendo la aplicación **Arcadia Finance** que corre en una instancia EC2 dentro de un VPC en AWS. El tráfico de internet pasa por el RE global de F5 XC antes de ser reenviado a la aplicación. Además del WAF, se activan **API Discovery** (inventario automático de endpoints), **API Protection** (validación estricta contra el esquema OpenAPI de Arcadia Finance, bloqueando endpoints no documentados y tipos de datos incorrectos) y **Bot Defense** (bloqueo de clientes automatizados sin ejecución de JavaScript, configurable vía variable `XC_BOT_DEFENSE`).
+Este workflow despliega una solución de **Web Application Firewall (WAF), API Protection y Bot Defense con F5 Distributed Cloud sobre el Regional Edge (RE)**, protegiendo la aplicación **Arcadia Finance** que corre en una instancia EC2 dentro de un VPC en AWS. El tráfico de internet pasa por el RE global de F5 XC antes de ser reenviado a la aplicación. Además del WAF, se activan **API Discovery** (inventario automático de endpoints), **API Protection** (validación y reporte contra el esquema OpenAPI de Arcadia Finance, en modo report para no bloquear la UI) y **Bot Defense** (detección de clientes automatizados sin ejecución de JavaScript, en modo flag para permitir el acceso legítimo desde el browser, configurable vía variable `XC_BOT_DEFENSE`).
 
 ---
 
@@ -15,7 +15,7 @@ Este workflow despliega una solución de **Web Application Firewall (WAF), API P
 | Aplicación en EC2               | Arcadia Finance corre en una instancia EC2 Amazon Linux 2 con Docker Compose (vía `userdata.sh`).      |
 | Modo blocking configurable      | La WAF policy puede operar en modo bloqueo o detección, controlado por la variable `XC_WAF_BLOCKING`.  |
 | API Discovery automático        | El LB observa tráfico real y construye un inventario de endpoints en F5 XC (aprendizaje pasivo).       |
-| API Protection con OpenAPI spec | El swagger de Arcadia se carga como `volterra_api_definition`; endpoints no documentados son bloqueados. |
+| API Protection con OpenAPI spec | El swagger de Arcadia se carga como `volterra_api_definition`; validación activa en modo **report** (no bloquea) para permitir el flujo completo de la UI. |
 | Infraestructura efímera         | Todo se provisiona desde cero con Terraform y se destruye con el workflow de destroy.                  |
 | Estado remoto compartido        | Los tres workspaces de TFC comparten estado remoto para pasar outputs (IP del EC2, puerto) entre módulos. |
 
@@ -391,43 +391,26 @@ Con acceso directo:
 
 ---
 
-### Comportamiento conocido de API Protection
+### Modo de operación de las capacidades de seguridad
 
-Con API Protection activa, F5 XC valida cada request contra el swagger de Arcadia Finance. Se han identificado los siguientes comportamientos:
+| Capacidad | Modo | Efecto |
+|-----------|------|--------|
+| **WAF** | Block/Detect según `XC_WAF_BLOCKING` | Bloquea (true) o reporta (false) ataques OWASP |
+| **API Protection** | **Report** (no block) | Valida y registra eventos, no bloquea la UI |
+| **Bot Defense** | **Flag** (no block) | Detecta y registra bots, permite acceso del browser |
 
-#### Endpoint no documentado — `side_bar_table.php` bloqueado
+#### ¿Por qué API Protection está en modo report?
 
-La UI de Arcadia llama a `/api/side_bar_table.php` para cargar la tabla de tarjetas/cuentas del usuario. Este endpoint **no está en el swagger**, por lo que API Protection lo bloquea con 403. Consecuencia visible: al hacer clic en una tarjeta o en el botón **Make Payment**, la UI no responde (el endpoint que carga los datos fue bloqueado antes de que el frontend lograra completar la operación).
+La UI de Arcadia tiene dos incompatibilidades con el swagger incluido:
 
-```bash
-# Confirmar bloqueo
-curl -s -b /tmp/arcadia_cookies.txt \
-  "http://arcadia.digitalvs.com/api/side_bar_table.php" \
-  -w "\nHTTP: %{http_code}\n"
-# Resultado: HTTP: 403  →  Request Rejected (sp4-sao)
-```
+1. **Endpoint no documentado** — `/api/side_bar_table.php` carga la tabla de tarjetas/cuentas pero no está en el swagger. En modo block, esto provoca que el botón **Make Payment** no responda (spinner infinito).
+2. **Tipos de datos** — el swagger define `amount` y `account` como `integer`, pero el formulario HTML los envía como strings. En modo block, las transferencias desde el browser son rechazadas con 403.
 
-#### Validación de tipos — transferencia bloqueada desde el browser
+En modo **report**, F5 XC registra ambas violaciones en Security Events sin interrumpir el flujo de la aplicación. Esto permite demostrar la capacidad de detección y el valor del inventario de API sin romper el demo.
 
-El swagger define `amount` y `account` como `type: integer`. El formulario HTML de Arcadia los envía como **strings** (comportamiento estándar de los formularios web). API Protection rechaza con 403 cualquier request donde esos campos sean strings.
+#### ¿Por qué Bot Defense está en modo flag?
 
-```bash
-# Con integers → 200 OK
-curl -s -b /tmp/arcadia_cookies.txt \
-  -X POST "http://arcadia.digitalvs.com/api/rest/execute_money_transfer.php" \
-  -H "Content-Type: application/json" \
-  -d '{"amount":10,"account":2075894,"currency":"EUR","friend":"Vincent"}' \
-  -w "\nHTTP: %{http_code}\n"
-
-# Con strings → 403 Bloqueado
-curl -s -b /tmp/arcadia_cookies.txt \
-  -X POST "http://arcadia.digitalvs.com/api/rest/execute_money_transfer.php" \
-  -H "Content-Type: application/json" \
-  -d '{"amount":"10","account":"2075894","currency":"EUR","friend":"Vincent"}' \
-  -w "\nHTTP: %{http_code}\n"
-```
-
-Esto demuestra que API Protection puede causar falsos positivos cuando el swagger no refleja exactamente el comportamiento real del cliente. La solución es ajustar el swagger para aceptar ambos tipos (`oneOf: [integer, string]`) o corregir el JavaScript del frontend.
+La latencia entre el Regional Edge (São Paulo) y el servidor BD (US) hace que el token JavaScript no llegue validado antes de que XC evalúe el POST de login → razón "Token Missing" → en modo block, el browser legítimo queda bloqueado. Con **flag**, BD sigue activo, clasifica cada request y registra los eventos, pero no interrumpe el login.
 
 ---
 
@@ -529,11 +512,12 @@ curl -i "http://arcadia.digitalvs.com/" \
 | XSS en JSON | ✅ `Request Rejected` |
 | Path Traversal | ✅ `Request Rejected` |
 | Command Injection | ✅ `Request Rejected` |
-| Scanner User-Agent | ✅ Bloqueado por Bot Defense (HTTP 200 + cuerpo de bloqueo) |
-| Credential stuffing | ✅ Bloqueado por Bot Defense (HTTP 200 + cuerpo de bloqueo) |
-| BOLA / endpoint no documentado | ✅ Bloqueado — API Protection enforcea el swagger OpenAPI |
-| Schema validation (tipo de dato) | ✅ Bloqueado — `amount`/`account` enviados como string desde el browser |
-| Endpoint shadow no documentado (`side_bar_table.php`) | ✅ Bloqueado — la UI no puede cargar tarjetas ni ejecutar Make Payment |
+| Scanner User-Agent | ⚑ Registrado por Bot Defense en Security Events (flag mode) |
+| Credential stuffing | ⚑ Registrado por Bot Defense en Security Events (flag mode) |
+| BOLA / endpoint no documentado | ⚑ Registrado por API Protection (report mode) — no bloquea |
+| Schema validation (tipo de dato) | ⚑ Registrado por API Protection (report mode) — no bloquea |
+| Endpoint shadow (`side_bar_table.php`) | ⚑ Registrado por API Protection (report mode) — UI funciona |
+| Login desde browser | ✅ Permitido — Bot Defense en flag, no bloquea token missing |
 
 Los eventos de bloqueo quedan registrados en F5 XC → **Security → Security Events** del namespace configurado en `XC_NAMESPACE`.
 
