@@ -4,7 +4,7 @@ Este workflow despliega una solución de **Web Application Firewall (WAF) con F5
 
 ---
 
-![alt text](image.png)
+![WAF on CE AWS — Architecture](img-waf-on-ce-aws.png)
 
 
 ## Resumen de arquitectura y caso de uso
