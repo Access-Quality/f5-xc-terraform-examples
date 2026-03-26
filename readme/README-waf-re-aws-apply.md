@@ -1,6 +1,6 @@
-# WAF en RE para VM en AWS - Deploy
+# API Protection + WAF en RE para VM en AWS - Deploy
 
-Este workflow despliega una solución de **Web Application Firewall (WAF) con F5 Distributed Cloud sobre el Regional Edge (RE)**, protegiendo la aplicación **Arcadia Finance** que corre en una instancia EC2 dentro de un VPC en AWS. El tráfico de internet pasa por el RE global de F5 XC antes de ser reenviado a la aplicación.
+Este workflow despliega una solución de **Web Application Firewall (WAF) y API Protection con F5 Distributed Cloud sobre el Regional Edge (RE)**, protegiendo la aplicación **Arcadia Finance** que corre en una instancia EC2 dentro de un VPC en AWS. El tráfico de internet pasa por el RE global de F5 XC antes de ser reenviado a la aplicación. Además del WAF, se activan **API Discovery** (inventario automático de endpoints) y **API Protection** (validación estricta contra el esquema OpenAPI de Arcadia Finance, bloqueando endpoints no documentados y tipos de datos incorrectos).
 
 ---
 
