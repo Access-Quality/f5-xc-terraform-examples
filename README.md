@@ -64,6 +64,28 @@ Despliega una **aplicación distribuida multi-cloud** donde los microservicios d
 
 ---
 
+### Comparativa de Arquitectura por Caso de Uso
+
+La siguiente tabla resume la topología de cada caso: dónde se inspecciona el tráfico, si fluye por el Regional Edge global de F5, si se instala un Customer Edge en el entorno del cliente y si la aplicación puede permanecer en una red privada sin IP pública expuesta.
+
+| Caso | Workflow | Punto de inspección | Tráfico pasa por RE | CE en cliente | AppConnect (túnel RE→CE) | App sin IP pública | Nube |
+| ---- | -------- | ------------------- | :-----------------: | :-----------: | :----------------------: | :----------------: | ---- |
+| 1 | `waf-re-aws-apply.yml` | **RE** (Regional Edge) | ✅ | ❌ | ❌ | ❌ | AWS |
+| 2 | `waf-on-ce-aws-apply.yml` | **CE** (Customer Edge) | ❌ | ✅ EKS | ❌ | ✅ | AWS |
+| 3 | `waf-on-ce-az-apply.yml` | **CE** (Customer Edge) | ❌ | ✅ AKS | ❌ | ✅ | Azure |
+| 4 | `waf-re-ac-aws-vm-apply.yml` | **RE + CE** | ✅ | ✅ EC2 | ✅ | ✅ | AWS |
+| 5 | `f5xc-api-ce-eks-apply.yml` | **RE + CE** | ✅ | ✅ EKS | ✅ | ✅ | AWS |
+| 6 | `teachable-01-mc-networkconnect-apply.yml` | **CE** (MCN este-oeste) | ✅ Global VN | ✅ AWS + Azure | ❌ | ✅ | AWS + Azure |
+| 7 | `bookinfo-smcn-apply.yaml` | **RE + CE** | ✅ | ✅ EKS + AKS | ✅ | ✅ | AWS + Azure |
+
+**Glosario:**
+- **RE (Regional Edge):** PoP global de F5. El tráfico de internet fluye por infraestructura de F5 antes de llegar a la aplicación.
+- **CE (Customer Edge):** Nodo desplegado en la infraestructura del cliente. Inspección local; el plano de control siempre conecta con F5 XC cloud.
+- **AppConnect:** El tráfico entra al RE global y se reenvía a la app a través de un túnel cifrado hasta el CE. La app no necesita IP pública.
+- **Global VN (MCN):** Red virtual global de F5 XC que conecta múltiples CEs entre nubes distintas sin VPNs ni peering directo.
+
+---
+
 ### Guía de Pruebas de Seguridad por Aplicación
 
 Cada caso de uso incluye una aplicación diferente. La siguiente tabla resume qué tipo de pruebas encajan mejor con cada una:
