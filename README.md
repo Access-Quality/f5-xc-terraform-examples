@@ -68,15 +68,15 @@ Despliega una **aplicación distribuida multi-cloud** donde los microservicios d
 
 La siguiente tabla resume la topología de cada caso: dónde se inspecciona el tráfico, si fluye por el Regional Edge global de F5, si se instala un Customer Edge en el entorno del cliente y si la aplicación puede permanecer en una red privada sin IP pública expuesta.
 
-| Caso | Workflow | Punto de inspección | Tráfico pasa por RE | CE en cliente | AppConnect (túnel RE→CE) | App sin IP pública | Nube |
-| ---- | -------- | ------------------- | :-----------------: | :-----------: | :----------------------: | :----------------: | ---- |
-| 1 | `waf-re-aws-apply.yml` | **RE** (Regional Edge) | ✅ | ❌ | ❌ | ❌ | AWS |
-| 2 | `waf-on-ce-aws-apply.yml` | **CE** (Customer Edge) | ❌ | ✅ EKS | ❌ | ✅ | AWS |
-| 3 | `waf-on-ce-az-apply.yml` | **CE** (Customer Edge) | ❌ | ✅ AKS | ❌ | ✅ | Azure |
-| 4 | `waf-re-ac-aws-vm-apply.yml` | **RE + CE** | ✅ | ✅ EC2 | ✅ | ✅ | AWS |
-| 5 | `f5xc-api-ce-eks-apply.yml` | **RE + CE** | ✅ | ✅ CE dentro del clúster EKS | ✅ | ✅ | AWS |
-| 6 | `teachable-01-mc-networkconnect-apply.yml` | **CE** (MCN este-oeste) | ✅ Global VN | ✅ AWS + Azure | ❌ | ✅ | AWS + Azure |
-| 7 | `bookinfo-smcn-apply.yaml` | **RE + CE** | ✅ | ✅ EKS + AKS | ✅ | ✅ | AWS + Azure |
+| Caso | Workflow | Punto de inspección | Tráfico pasa por RE | CE en cliente | AppConnect (túnel RE→CE) | App sin IP pública | Dónde corre la app | Nube |
+| ---- | -------- | ------------------- | :-----------------: | :-----------: | :----------------------: | :----------------: | ------------------ | ---- |
+| 1 | `waf-re-aws-apply.yml` | **RE** (Regional Edge) | ✅ | ❌ | ❌ | ❌ | VM (EC2) | AWS |
+| 2 | `waf-on-ce-aws-apply.yml` | **CE** (Customer Edge) | ❌ | ✅ EKS | ❌ | ✅ | Clúster EKS | AWS |
+| 3 | `waf-on-ce-az-apply.yml` | **CE** (Customer Edge) | ❌ | ✅ AKS | ❌ | ✅ | Clúster AKS | Azure |
+| 4 | `waf-re-ac-aws-vm-apply.yml` | **RE + CE** | ✅ | ✅ EC2 | ✅ | ✅ | VM (EC2) | AWS |
+| 5 | `f5xc-api-ce-eks-apply.yml` | **RE + CE** | ✅ | ✅ CE dentro del clúster EKS | ✅ | ✅ | Clúster EKS | AWS |
+| 6 | `teachable-01-mc-networkconnect-apply.yml` | **CE** (MCN este-oeste) | ✅ Global VN | ✅ AWS + Azure | ❌ | ✅ | VMs en AWS y Azure | AWS + Azure |
+| 7 | `bookinfo-smcn-apply.yaml` | **RE + CE** | ✅ | ✅ EKS + AKS | ✅ | ✅ | Clústeres EKS + AKS | AWS + Azure |
 
 **Glosario:**
 - **RE (Regional Edge):** PoP global de F5. El tráfico de internet fluye por infraestructura de F5 antes de llegar a la aplicación.
