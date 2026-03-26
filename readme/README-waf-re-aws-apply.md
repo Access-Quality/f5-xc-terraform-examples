@@ -170,7 +170,7 @@ Configurar en **Settings → Secrets and variables → Variables**:
 | Variable           | Ejemplo                        | Descripción                                          |
 | ------------------ | ------------------------------ | ---------------------------------------------------- |
 | `XC_NAMESPACE`     | `arcadia-prod`                 | Namespace de F5 XC donde se crea el LB y WAF         |
-| `ARCADIA_DOMAIN`   | `arcadia-aws.example.com`      | FQDN de la aplicación en el HTTP LB de F5 XC         |
+| `ARCADIA_DOMAIN`   | `arcadia.digitalvs.com`        | FQDN de la aplicación en el HTTP LB de F5 XC         |
 | `XC_WAF_BLOCKING`  | `true`                         | `true` = modo bloqueo; `false` = modo detección      |
 
 ---
