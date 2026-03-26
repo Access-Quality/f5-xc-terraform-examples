@@ -415,6 +415,8 @@ El módulo `azure/aks-cluster` referencia este RG directamente en el peering `pe
 3. Hacer clic en **Run workflow**.
 4. Confirmar la ejecución. No hay inputs adicionales.
 
+> El nombre del workflow en la UI de GitHub Actions es **"WAF en CE AZ - Deploy"**.
+
 ### Criterios de éxito
 
 - Los cuatro jobs terminan en estado `success`.
@@ -479,7 +481,7 @@ http://<BOUTIQUE_DOMAIN>/
 
 ### 4. Verificar la WAF (modo monitoring)
 
-Enviar un request con payload malicioso. En modo monitoring el request **pasa**, pero queda registrado como Security Event en F5 XC:
+Enviar requests con payloads maliciosos. En modo monitoring el tráfico **pasa** (HTTP 200), pero F5 XC lo detecta y lo registra como Security Event:
 
 ```bash
 # XSS en query string
@@ -490,13 +492,35 @@ curl -v "http://<BOUTIQUE_DOMAIN>/?id=1'+OR+'1'='1"
 
 # Path traversal
 curl -v "http://<BOUTIQUE_DOMAIN>/../../etc/passwd"
+
+# Command injection
+curl -v "http://<BOUTIQUE_DOMAIN>/?cmd=;cat+/etc/passwd"
+
+# User-Agent de scanner conocido (sqlmap)
+curl -v -A "sqlmap/1.0" "http://<BOUTIQUE_DOMAIN>/"
+
+# User-Agent de scanner conocido (Nikto)
+curl -v -A "Nikto/2.1.6" "http://<BOUTIQUE_DOMAIN>/"
 ```
 
 **Verificar los eventos en F5 XC:**
 
 1. Ir a **Multi-Cloud App Connect → Namespaces → `XC_NAMESPACE`**.
 2. Ir a **Security → Security Events**.
-3. Los requests anteriores deben aparecer con la firma WAF detectada (tipo `ATTACK_TYPE_XSS`, `ATTACK_TYPE_SQL_INJECTION`, etc.) aunque con acción `ALLOW` (monitoring mode).
+3. Cada request aparecerá con:
+   - **Tipo de ataque:** `ATTACK_TYPE_XSS`, `ATTACK_TYPE_SQL_INJECTION`, `ATTACK_TYPE_DIRECTORY_TRAVERSAL`, `ATTACK_TYPE_COMMAND_EXECUTION`, `BOT_CLIENT`, etc.
+   - **Acción:** `ALLOW` (modo monitoring — el tráfico pasa).
+   - Request completo, IP origen, URI y firma disparada.
+
+### 5. Ver el Security Dashboard
+
+En **Security → Security Dashboard** (dentro del namespace `XC_NAMESPACE`) se pueden ver:
+- Gráfica temporal de eventos de seguridad.
+- Top atacantes por IP.
+- Top firmas WAF disparadas.
+- Distribución por tipo de ataque.
+
+Es el panel de demostración visual más efectivo para mostrar la capacidad de detección del WAF.
 
 ### 5. Cambiar WAF a modo blocking (opcional)
 
