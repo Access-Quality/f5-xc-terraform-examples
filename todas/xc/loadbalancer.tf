@@ -20,7 +20,7 @@ resource "volterra_healthcheck" "shared" {
 
   unhealthy_threshold = 1
   healthy_threshold   = 3
-  interval            = 10
+  interval            = 15
   timeout             = 5
 }
 
