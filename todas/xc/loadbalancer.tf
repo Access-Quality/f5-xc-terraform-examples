@@ -27,11 +27,11 @@ resource "volterra_origin_pool" "op" {
 
 resource "volterra_http_loadbalancer" "lb_https" {
   depends_on  = [volterra_origin_pool.op, volterra_app_firewall.waap-tf, volterra_api_definition.arcadia]
-  name        = format("%s-arcadia-xclb-%s", local.project_prefix, local.build_suffix)
+  name        = format("%s-xclb-%s", local.project_prefix, local.build_suffix)
   namespace   = var.xc_namespace
-  description = format("HTTP LB with WAF for Arcadia Finance on AWS RE")
+  description = format("HTTP LB with WAF for Arcadia Finance and DVWA on AWS RE")
 
-  domains                         = [var.arcadia_domain]
+  domains                         = [var.arcadia_domain, var.dvwa_domain]
   advertise_on_public_default_vip = true
 
   default_route_pools {
@@ -111,39 +111,6 @@ resource "volterra_http_loadbalancer" "lb_https" {
       regional_endpoint = "US"
       timeout           = 3000
     }
-  }
-
-  disable_waf                     = false
-  round_robin                     = true
-  service_policies_from_namespace = true
-  user_id_client_ip               = true
-  source_ip_stickiness            = true
-}
-
-resource "volterra_http_loadbalancer" "dvwa_lb" {
-  depends_on  = [volterra_origin_pool.op, volterra_app_firewall.waap-tf]
-  name        = format("%s-dvwa-xclb-%s", local.project_prefix, local.build_suffix)
-  namespace   = var.xc_namespace
-  description = format("HTTP LB with WAF for DVWA on AWS RE")
-
-  domains                         = [var.dvwa_domain]
-  advertise_on_public_default_vip = true
-
-  default_route_pools {
-    pool {
-      name      = volterra_origin_pool.op.name
-      namespace = var.xc_namespace
-    }
-    weight = 1
-  }
-
-  http {
-    port = 80
-  }
-
-  app_firewall {
-    name      = volterra_app_firewall.waap-tf.name
-    namespace = var.xc_namespace
   }
 
   disable_waf                     = false

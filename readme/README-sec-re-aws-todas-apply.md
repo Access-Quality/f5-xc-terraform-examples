@@ -5,7 +5,7 @@ Este workflow despliega una solucion de **WAF sobre el Regional Edge (RE) de F5 
 - **Arcadia Finance**, accesible por `ARCADIA_DOMAIN`
 - **DVWA**, accesible por `DVWA_DOMAIN`
 
-Ambas aplicaciones corren en una sola VM Amazon Linux 2. Dentro de la instancia se levanta un **nginx compartido** que enruta por `Host` hacia los contenedores correctos. En F5 XC se publican **dos HTTP Load Balancers**, uno por FQDN, apuntando al mismo origin pool.
+Ambas aplicaciones corren en una sola VM Amazon Linux 2. Dentro de la instancia se levanta un **nginx compartido** que enruta por `Host` hacia los contenedores correctos. En F5 XC se publica **un solo HTTP Load Balancer** que anuncia ambos FQDN y apunta al mismo origin pool.
 
 ---
 
@@ -32,10 +32,11 @@ Internet
 +-----------------------------------------------------------+
 | F5 Distributed Cloud - Regional Edge                      |
 |                                                           |
-|  Arcadia LB  ->  ARCADIA_DOMAIN                           |
-|  DVWA LB     ->  DVWA_DOMAIN                              |
+|  HTTP Load Balancer unico                                 |
+|    - ARCADIA_DOMAIN                                       |
+|    - DVWA_DOMAIN                                          |
 |                                                           |
-|  Ambos apuntan al mismo Origin Pool                       |
+|  Un solo LB apunta al mismo Origin Pool                   |
 +-----------------------------------------------------------+
                            |
                            | origin pool -> EIP del EC2 :8080
@@ -61,7 +62,7 @@ todas/infra  -> VPC + Subnet publica + Internet Gateway + Security Group
 todas/vm     -> EC2 + Elastic IP + Arcadia + DVWA + nginx reverse proxy
       |
       v
-todas/xc     -> XC Namespace + Origin Pool + Arcadia LB + DVWA LB + WAF
+todas/xc     -> XC Namespace + Origin Pool + HTTP LB unico + WAF
 ```
 
 ---
@@ -73,7 +74,7 @@ todas/xc     -> XC Namespace + Origin Pool + Arcadia LB + DVWA LB + WAF
 3. Configurar un nginx local que enrute por `Host`:
    - `ARCADIA_DOMAIN` -> Arcadia
    - `DVWA_DOMAIN` -> DVWA
-4. Crear en F5 XC los objetos necesarios para publicar ambos dominios en el RE.
+4. Crear en F5 XC un solo HTTP Load Balancer para publicar ambos dominios en el RE.
 
 ---
 
@@ -140,8 +141,7 @@ todas/xc     -> XC Namespace + Origin Pool + Arcadia LB + DVWA LB + WAF
 
 - Directorio: `todas/xc`
 - Crea un origin pool comun hacia la misma VM.
-- Publica **Arcadia** en `ARCADIA_DOMAIN`.
-- Publica **DVWA** en `DVWA_DOMAIN`.
+- Publica **Arcadia** y **DVWA** en un solo HTTP Load Balancer con ambos dominios.
 - Mantiene API Discovery y API Protection para Arcadia.
 
 ---

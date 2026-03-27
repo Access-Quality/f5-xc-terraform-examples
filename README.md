@@ -68,7 +68,7 @@ Despliega una **aplicación distribuida multi-cloud** donde los microservicios d
 
 ### 8. Seguridad en RE para Arcadia + DVWA en AWS — `sec-re-aws-todas-apply.yml`
 
-Despliega una solucion de **WAF sobre el Regional Edge (RE) de F5 Distributed Cloud** para **dos aplicaciones distintas en la misma instancia EC2** de AWS: **Arcadia Finance** y **DVWA**. Cada aplicacion se publica con su propio FQDN, `ARCADIA_DOMAIN` y `DVWA_DOMAIN`, y ambas comparten la misma VM mediante un **nginx reverse proxy** interno que enruta por `Host`. En F5 XC se crean dos HTTP Load Balancers, uno por dominio, apuntando al mismo origin pool. Arcadia conserva **API Discovery**, **API Protection** y soporte opcional de **Bot Defense**; DVWA queda publicada con **WAF** para pruebas web clasicas.
+Despliega una solucion de **WAF sobre el Regional Edge (RE) de F5 Distributed Cloud** para **dos aplicaciones distintas en la misma instancia EC2** de AWS: **Arcadia Finance** y **DVWA**. Cada aplicacion se publica con su propio FQDN, `ARCADIA_DOMAIN` y `DVWA_DOMAIN`, y ambas comparten la misma VM mediante un **nginx reverse proxy** interno que enruta por `Host`. En F5 XC se crea **un solo HTTP Load Balancer** que anuncia ambos dominios y apunta al mismo origin pool. Arcadia conserva **API Discovery**, **API Protection** y soporte opcional de **Bot Defense**; DVWA queda publicada con **WAF** para pruebas web clasicas.
 
 👉 [Ver guía completa](readme/README-sec-re-aws-todas-apply.md)
 
@@ -139,7 +139,7 @@ Cada caso de uso incluye una aplicación diferente. La siguiente tabla resume qu
 ## Historial de Cambios
 
 ### 2026-03-27
-- **Seguridad en RE para Arcadia + DVWA en AWS** (`sec-re-aws-todas-apply.yml` / `sec-re-aws-todas-destroy.yml`): nuevo caso agregado para publicar **Arcadia Finance** y **DVWA** en la misma VM EC2 de AWS, usando dos FQDN (`ARCADIA_DOMAIN` y `DVWA_DOMAIN`) y un proxy nginx interno con enrutamiento por `Host`. Se añadió la guía [README](readme/README-sec-re-aws-todas-apply.md) y el arbol Terraform autocontenido en `todas/`.
+- **Seguridad en RE para Arcadia + DVWA en AWS** (`sec-re-aws-todas-apply.yml` / `sec-re-aws-todas-destroy.yml`): nuevo caso agregado para publicar **Arcadia Finance** y **DVWA** en la misma VM EC2 de AWS, usando dos FQDN (`ARCADIA_DOMAIN` y `DVWA_DOMAIN`), un proxy nginx interno con enrutamiento por `Host` y **un solo HTTP Load Balancer** de F5 XC para ambos dominios. Se añadió la guía [README](readme/README-sec-re-aws-todas-apply.md) y el arbol Terraform autocontenido en `todas/`.
 
 ### 2026-03-26
 - **API + WAF + Bot Defense en RE AWS** (`waf-re-aws-apply.yml` / `waf-re-aws-destroy.yml`): workflows renombrados a `API + WAF + BD` para reflejar que incluyen **WAF**, **API Discovery**, **API Protection** y **Bot Defense** (opcional vía variable `XC_BOT_DEFENSE`). Se agregó `VOLT_API_P12_FILE` al job `terraform_xc` de ambos workflows para correcta autenticación del provider de F5 XC.
