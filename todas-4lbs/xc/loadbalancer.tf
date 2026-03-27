@@ -99,7 +99,7 @@ resource "volterra_http_loadbalancer" "applications" {
   }
 
   dynamic "enable_api_discovery" {
-    for_each = var.xc_api_discovery ? [1] : []
+    for_each = var.xc_api_discovery && each.value.enable_api_security ? [1] : []
     content {
       enable_learn_from_redirect_traffic = true
       discovered_api_settings {
@@ -109,7 +109,7 @@ resource "volterra_http_loadbalancer" "applications" {
   }
 
   dynamic "api_specification" {
-    for_each = var.xc_api_protection && length(var.xc_api_specs) > 0 ? [1] : []
+    for_each = var.xc_api_protection && each.value.enable_api_security && length(var.xc_api_specs) > 0 ? [1] : []
     content {
       api_definition {
         name      = volterra_api_definition.apis[0].name
@@ -131,7 +131,7 @@ resource "volterra_http_loadbalancer" "applications" {
   }
 
   dynamic "bot_defense" {
-    for_each = var.xc_bot_defense ? [1] : []
+    for_each = var.xc_bot_defense && each.value.enable_bot_defense ? [1] : []
     content {
       policy {
         javascript_mode   = "SYNC_JS_NO_CACHING"

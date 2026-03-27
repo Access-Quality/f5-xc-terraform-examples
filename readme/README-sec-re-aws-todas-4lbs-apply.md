@@ -135,7 +135,7 @@ El modulo `todas-4lbs/xc` crea los siguientes objetos principales:
 | HTTP Load Balancers | Cuatro LBs: Arcadia, DVWA, Boutique y crAPI |
 | App Firewall | WAF comun reutilizado por todos los LBs |
 | API Definition | Solo se crea si hay una o mas specs cargadas |
-| Bot Defense | Opcional; se adjunta a los LBs cuando esta habilitado |
+| Bot Defense | Opcional; se adjunta solo al LB de Arcadia cuando esta habilitado |
 
 ### Distribucion de los LBs
 
@@ -158,21 +158,26 @@ El modulo `todas-4lbs/xc` crea los siguientes objetos principales:
 #### API Discovery
 
 - Se habilita con `XC_API_DISCOVERY=true`
-- Se aplica a los cuatro LBs
-- Tiene mas sentido practico en Arcadia y crAPI, pero el workflow la configura de forma uniforme
+- Se aplica solo a Arcadia y crAPI
+- DVWA y Boutique quedan fuera para no consumir capacidad de validacion API donde no aporta valor real
 
 #### API Protection
 
 - Se habilita con `XC_API_PROTECTION=true`
 - Solo se activa si existe al menos una spec cargada en XC
 - Opera en modo report
+- Se aplica solo a Arcadia y crAPI
 - El workflow aborta si `XC_API_PROTECTION=true` pero no se cargo ninguna spec
 
 #### Bot Defense
 
 - Se habilita con `XC_BOT_DEFENSE=true`
-- Se inserta en los LBs creados por el modulo
+- Se inserta solo en el LB de Arcadia
 - La ruta configurada corresponde a `POST /trading/auth.php`, por lo que su utilidad real esta centrada en Arcadia
+
+### Consideracion importante de limites en XC
+
+Algunos tenants de F5 XC tienen limites bajos para `http_loadbalancer.oas_validation`. Por eso este caso restringe API Discovery y API Protection a **Arcadia** y **crAPI**, que son las aplicaciones donde realmente se aprovechan esas capacidades. Si intentas adjuntar validacion OpenAPI a los cuatro LBs, puedes agotar cuota del tenant y recibir errores `429` durante el `terraform apply`.
 
 ## 6. Workflows involucrados
 

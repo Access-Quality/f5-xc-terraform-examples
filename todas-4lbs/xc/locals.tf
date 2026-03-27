@@ -40,9 +40,11 @@ locals {
 
   loadbalancers = {
     arcadia = {
-      description      = "HTTP LB with WAF for Arcadia on AWS RE with dedicated XC LB"
-      domains          = [var.arcadia_domain]
-      default_pool_key = "arcadia_main"
+      description          = "HTTP LB with WAF for Arcadia on AWS RE with dedicated XC LB"
+      domains              = [var.arcadia_domain]
+      default_pool_key     = "arcadia_main"
+      enable_api_security  = true
+      enable_bot_defense   = true
       route_definitions = [
         {
           host        = var.arcadia_domain
@@ -62,21 +64,27 @@ locals {
       ]
     }
     dvwa = {
-      description       = "HTTP LB with WAF for DVWA on AWS RE with dedicated XC LB"
-      domains           = [var.dvwa_domain]
-      default_pool_key  = "dvwa"
-      route_definitions = []
+      description         = "HTTP LB with WAF for DVWA on AWS RE with dedicated XC LB"
+      domains             = [var.dvwa_domain]
+      default_pool_key    = "dvwa"
+      enable_api_security = false
+      enable_bot_defense  = false
+      route_definitions   = []
     }
     boutique = {
-      description       = "HTTP LB with WAF for Online Boutique on AWS RE with dedicated XC LB"
-      domains           = [var.boutique_domain]
-      default_pool_key  = "boutique"
-      route_definitions = []
+      description         = "HTTP LB with WAF for Online Boutique on AWS RE with dedicated XC LB"
+      domains             = [var.boutique_domain]
+      default_pool_key    = "boutique"
+      enable_api_security = false
+      enable_bot_defense  = false
+      route_definitions   = []
     }
     crapi = {
-      description      = "HTTP LB with WAF for crAPI and Mailhog on AWS RE with dedicated XC LB"
-      domains          = [var.crapi_domain, var.mailhog_domain]
-      default_pool_key = "crapi"
+      description          = "HTTP LB with WAF for crAPI and Mailhog on AWS RE with dedicated XC LB"
+      domains              = [var.crapi_domain, var.mailhog_domain]
+      default_pool_key     = "crapi"
+      enable_api_security  = true
+      enable_bot_defense   = false
       route_definitions = [
         {
           host        = var.mailhog_domain
