@@ -51,7 +51,7 @@ variable "mailhog_domain" {
 variable "xc_waf_blocking" {
   type        = bool
   description = "Set WAF to blocking or monitoring mode"
-  default     = true
+  default     = false
 }
 
 variable "xc_api_discovery" {

@@ -175,7 +175,7 @@ jobs:
       TF_VAR_boutique_domain:          ${{ vars.BOUTIQUE_DOMAIN }}
       TF_VAR_crapi_domain:             ${{ vars.CRAPI_DOMAIN }}
       TF_VAR_mailhog_domain:           ${{ vars['MAILHOG_DOMAIN'] }}
-      TF_VAR_xc_waf_blocking:          ${{ vars.XC_WAF_BLOCKING }}
+      TF_VAR_xc_waf_blocking:          false
       TF_VAR_xc_bot_defense:           ${{ vars.XC_BOT_DEFENSE }}
       TF_VAR_xc_api_discovery:         ${{ vars.XC_API_DISCOVERY }}
       TF_VAR_xc_api_protection:        ${{ vars.XC_API_PROTECTION }}
