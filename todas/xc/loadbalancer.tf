@@ -7,6 +7,23 @@ resource "volterra_api_definition" "arcadia" {
   swagger_specs = var.xc_api_spec
 }
 
+resource "volterra_healthcheck" "shared" {
+  name        = format("%s-xchc-%s", local.project_prefix, local.build_suffix)
+  namespace   = var.xc_namespace
+  description = format("Health check for shared origin %s:%s", local.origin_ip, local.origin_port)
+
+  http_health_check {
+    path                  = "/healthz"
+    host_header           = var.arcadia_domain
+    expected_status_codes = ["200"]
+  }
+
+  unhealthy_threshold = 1
+  healthy_threshold   = 3
+  interval            = 10
+  timeout             = 5
+}
+
 resource "volterra_origin_pool" "op" {
   depends_on  = [null_resource.namespace_ready]
   name        = format("%s-xcop-%s", local.project_prefix, local.build_suffix)
@@ -17,6 +34,11 @@ resource "volterra_origin_pool" "op" {
     public_ip {
       ip = local.origin_ip
     }
+  }
+
+  healthcheck {
+    name      = volterra_healthcheck.shared.name
+    namespace = var.xc_namespace
   }
 
   no_tls                 = true

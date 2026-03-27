@@ -36,12 +36,23 @@ upstream boutique {
 server {
     listen 80 default_server;
     server_name _;
+
+    location = /healthz {
+        access_log off;
+        return 200;
+    }
+
     return 404;
 }
 
 server {
     listen 80;
     server_name ${arcadia_domain};
+
+    location = /healthz {
+        access_log off;
+        return 200;
+    }
 
     location / {
         proxy_set_header Host $host;
@@ -76,6 +87,11 @@ server {
     listen 80;
     server_name ${dvwa_domain};
 
+    location = /healthz {
+        access_log off;
+        return 200;
+    }
+
     location / {
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -87,6 +103,11 @@ server {
 server {
     listen 80;
     server_name ${boutique_domain};
+
+    location = /healthz {
+        access_log off;
+        return 200;
+    }
 
     location / {
         proxy_set_header Host $host;
