@@ -1,10 +1,11 @@
-resource "volterra_api_definition" "arcadia" {
+resource "volterra_api_definition" "apis" {
+  count     = length(var.xc_api_specs) > 0 ? 1 : 0
   name      = format("%s-xcapi-%s", local.project_prefix, local.build_suffix)
   namespace = var.xc_namespace
 
   depends_on = [null_resource.namespace_ready]
 
-  swagger_specs = var.xc_api_spec
+  swagger_specs = var.xc_api_specs
 }
 
 resource "volterra_healthcheck" "shared" {
@@ -48,7 +49,7 @@ resource "volterra_origin_pool" "op" {
 }
 
 resource "volterra_http_loadbalancer" "lb_https" {
-  depends_on  = [volterra_origin_pool.op, volterra_app_firewall.waap-tf, volterra_api_definition.arcadia]
+  depends_on  = [volterra_origin_pool.op, volterra_app_firewall.waap-tf]
   name        = format("%s-xclb-%s", local.project_prefix, local.build_suffix)
   namespace   = var.xc_namespace
   description = format("HTTP LB with WAF for Arcadia Finance, DVWA, Online Boutique and crAPI on AWS RE")
@@ -73,28 +74,34 @@ resource "volterra_http_loadbalancer" "lb_https" {
     namespace = var.xc_namespace
   }
 
-  enable_api_discovery {
-    enable_learn_from_redirect_traffic = true
-    discovered_api_settings {
-      purge_duration_for_inactive_discovered_apis = 7
+  dynamic "enable_api_discovery" {
+    for_each = var.xc_api_discovery ? [1] : []
+    content {
+      enable_learn_from_redirect_traffic = true
+      discovered_api_settings {
+        purge_duration_for_inactive_discovered_apis = 7
+      }
     }
   }
 
-  api_specification {
-    api_definition {
-      name      = volterra_api_definition.arcadia.name
-      namespace = var.xc_namespace
-    }
-    validation_all_spec_endpoints {
-      validation_mode {
-        validation_mode_active {
-          request_validation_properties = ["PROPERTY_QUERY_PARAMETERS", "PROPERTY_PATH_PARAMETERS", "PROPERTY_CONTENT_TYPE", "PROPERTY_COOKIE_PARAMETERS", "PROPERTY_HTTP_HEADERS", "PROPERTY_HTTP_BODY"]
-          enforcement_block             = false
-          enforcement_report            = true
-        }
+  dynamic "api_specification" {
+    for_each = var.xc_api_protection && length(var.xc_api_specs) > 0 ? [1] : []
+    content {
+      api_definition {
+        name      = volterra_api_definition.apis[0].name
+        namespace = var.xc_namespace
       }
-      fall_through_mode {
-        fall_through_mode_allow = true
+      validation_all_spec_endpoints {
+        validation_mode {
+          validation_mode_active {
+            request_validation_properties = ["PROPERTY_QUERY_PARAMETERS", "PROPERTY_PATH_PARAMETERS", "PROPERTY_CONTENT_TYPE", "PROPERTY_COOKIE_PARAMETERS", "PROPERTY_HTTP_HEADERS", "PROPERTY_HTTP_BODY"]
+            enforcement_block             = false
+            enforcement_report            = true
+          }
+        }
+        fall_through_mode {
+          fall_through_mode_allow = true
+        }
       }
     }
   }

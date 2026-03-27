@@ -28,7 +28,9 @@ jobs:
       TF_VAR_crapi_domain:             ${{ vars.CRAPI_DOMAIN }}
       TF_VAR_xc_waf_blocking:          ${{ vars.XC_WAF_BLOCKING }}
       TF_VAR_xc_bot_defense:           ${{ vars.XC_BOT_DEFENSE }}
-      TF_VAR_xc_api_spec:              '[]'
+      TF_VAR_xc_api_discovery:         ${{ vars.XC_API_DISCOVERY }}
+      TF_VAR_xc_api_protection:        ${{ vars.XC_API_PROTECTION }}
+      TF_VAR_xc_api_specs:             '[]'
       VES_P12_PASSWORD:                ${{ secrets.XC_P12_PASSWORD }}
       VOLT_API_P12_FILE:               api.p12
     steps:
@@ -66,11 +68,11 @@ jobs:
       - name: Terraform Destroy
         run: terraform destroy -auto-approve -input=false
 
-      - name: Delete Arcadia swagger from F5 XC object store
+      - name: Delete API specs from F5 XC object store
         run: |
-          SWAGGER_NAME="arcadia-oas3"
           API_URL="${{ secrets.XC_API_URL }}"
           NAMESPACE="${{ vars.XC_NAMESPACE }}"
+          SWAGGERS="arcadia-oas3 crapi-openapi"
 
           openssl pkcs12 -legacy -in api.p12 -clcerts -nokeys \
             -passin pass:"${{ secrets.XC_P12_PASSWORD }}" -out /tmp/cert.pem 2>/dev/null || \
@@ -81,18 +83,20 @@ jobs:
           openssl pkcs12 -in api.p12 -nocerts -nodes \
             -passin pass:"${{ secrets.XC_P12_PASSWORD }}" -out /tmp/key.pem
 
-          HTTP_CODE=$(curl -s -o /tmp/swagger_del.json -w "%{http_code}" \
-            --cert /tmp/cert.pem --key /tmp/key.pem \
-            -X DELETE \
-            "${API_URL}/object_store/namespaces/${NAMESPACE}/stored_objects/swagger/${SWAGGER_NAME}")
+          for SWAGGER_NAME in ${SWAGGERS}; do
+            HTTP_CODE=$(curl -s -o /tmp/swagger_del.json -w "%{http_code}" \
+              --cert /tmp/cert.pem --key /tmp/key.pem \
+              -X DELETE \
+              "${API_URL}/object_store/namespaces/${NAMESPACE}/stored_objects/swagger/${SWAGGER_NAME}")
+            echo "Swagger ${SWAGGER_NAME} response code: ${HTTP_CODE}"
+            cat /tmp/swagger_del.json
+            if [ "${HTTP_CODE}" = "200" ] || [ "${HTTP_CODE}" = "404" ]; then
+              echo "Swagger ${SWAGGER_NAME} removido (${HTTP_CODE})."
+            else
+              echo "WARNING: No se pudo borrar ${SWAGGER_NAME} (HTTP ${HTTP_CODE}) - borrar manualmente si es necesario."
+            fi
+          done
           rm -f /tmp/cert.pem /tmp/key.pem
-          echo "Response code: ${HTTP_CODE}"
-          cat /tmp/swagger_del.json
-          if [ "${HTTP_CODE}" = "200" ] || [ "${HTTP_CODE}" = "404" ]; then
-            echo "Swagger stored object removed (${HTTP_CODE})."
-          else
-            echo "WARNING: Could not delete swagger stored object (HTTP ${HTTP_CODE}) - delete manually if needed."
-          fi
 
       - name: Delete XC Namespace
         run: |

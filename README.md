@@ -68,7 +68,18 @@ Despliega una **aplicación distribuida multi-cloud** donde los microservicios d
 
 ### 8. Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS — `sec-re-aws-todas-apply.yml`
 
-Despliega una solucion de **WAF sobre el Regional Edge (RE) de F5 Distributed Cloud** para **cuatro aplicaciones distintas en la misma instancia EC2** de AWS: **Arcadia Finance**, **DVWA**, **Online Boutique** y **crAPI**. Cada aplicacion se publica con su propio FQDN, `ARCADIA_DOMAIN`, `DVWA_DOMAIN`, `BOUTIQUE_DOMAIN` y `CRAPI_DOMAIN`, y todas comparten la misma VM mediante un **nginx reverse proxy** interno que enruta por `Host`. En F5 XC se crea **un solo HTTP Load Balancer** que anuncia los cuatro dominios y apunta al mismo origin pool. Arcadia conserva **API Discovery**, **API Protection** y soporte opcional de **Bot Defense**; DVWA, Online Boutique y crAPI quedan publicadas con **WAF** para pruebas web y API.
+Despliega una solucion de **seguridad en el Regional Edge (RE) de F5 Distributed Cloud** para **cuatro aplicaciones distintas publicadas desde una sola instancia EC2** de AWS: **Arcadia Finance**, **DVWA**, **Online Boutique** y **crAPI**. Cada aplicacion se expone con su propio FQDN, `ARCADIA_DOMAIN`, `DVWA_DOMAIN`, `BOUTIQUE_DOMAIN` y `CRAPI_DOMAIN`, pero todas comparten la misma VM y el mismo Elastic IP. Dentro de la instancia corre un **nginx instalado en el host** que enruta por `Host` hacia contenedores Docker publicados solo en `127.0.0.1`, lo que simplifica el health check y deja el puerto de origen fijo en `80`.
+
+En F5 XC se crea **un solo HTTP Load Balancer** que anuncia los cuatro dominios y apunta a **un solo origin pool**. Sobre ese LB se aplican controles globales de seguridad:
+
+- **WAF** global en modo bloqueo o report segun `XC_WAF_BLOCKING`
+- **API Discovery** global si `XC_API_DISCOVERY=true`
+- **API Protection** global en modo report si `XC_API_PROTECTION=true`
+- **Bot Defense** opcional para Arcadia sobre `POST /trading/auth.php`
+
+Las especificaciones OpenAPI se cargan de forma opcional al object store de XC para **Arcadia** y **crAPI** mediante las variables `XC_UPLOAD_ARCADIA_API_SPEC` y `XC_UPLOAD_CRAPI_API_SPEC`. El workflow construye dinamicamente la lista de specs que Terraform debe asociar al load balancer y aborta si se intenta activar API Protection sin haber subido al menos una spec.
+
+El caso incluye ademas validaciones de readiness tanto contra el origen directo como contra los endpoints publicos, de forma que el workflow no termina correctamente hasta comprobar que las cuatro aplicaciones responden.
 
 👉 [Ver guía completa](readme/README-sec-re-aws-todas-apply.md)
 
@@ -132,14 +143,14 @@ Cada caso de uso incluye una aplicación diferente. La siguiente tabla resume qu
 | `f5xc-api-ce-eks-apply.yml`                | API Security + WAF en RE + CE en EKS     | [README](readme/README-f5xc-api-ce-eks-apply.md)                  |
 | `teachable-01-mc-networkconnect-apply.yml` | MCN Network Connect                      | [README](readme/README-teachable-01-mcn-networkconnect-apply.md)  |
 | `bookinfo-smcn-apply.yaml`                 | Multi-cloud + WAF                        | [README](readme/README-bookinfo-smcn-apply.md)                    |
-| `sec-re-aws-todas-apply.yml`               | WAF + API Security para Arcadia + WAF para DVWA, Boutique y crAPI | [README](readme/README-sec-re-aws-todas-apply.md)           |
+| `sec-re-aws-todas-apply.yml`               | WAF global + API Discovery/Protection para Arcadia y crAPI + Bot Defense opcional | [README](readme/README-sec-re-aws-todas-apply.md)           |
 
 ---
 
 ## Historial de Cambios
 
 ### 2026-03-27
-- **Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS** (`sec-re-aws-todas-apply.yml` / `sec-re-aws-todas-destroy.yml`): el caso compartido en una sola VM EC2 de AWS se amplió para publicar tambien **crAPI**, usando ahora cuatro FQDN (`ARCADIA_DOMAIN`, `DVWA_DOMAIN`, `BOUTIQUE_DOMAIN` y `CRAPI_DOMAIN`), un proxy nginx interno con enrutamiento por `Host` y **un solo HTTP Load Balancer** de F5 XC para los cuatro dominios. Se actualizo la guía [README](readme/README-sec-re-aws-todas-apply.md) y el arbol Terraform autocontenido en `todas/`.
+- **Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS** (`sec-re-aws-todas-apply.yml` / `sec-re-aws-todas-destroy.yml`): el caso compartido en una sola VM EC2 de AWS se amplió para publicar tambien **crAPI**, usando ahora cuatro FQDN (`ARCADIA_DOMAIN`, `DVWA_DOMAIN`, `BOUTIQUE_DOMAIN` y `CRAPI_DOMAIN`), un proxy nginx en el host con enrutamiento por `Host`, health checks estables sobre `:80` y **un solo HTTP Load Balancer** de F5 XC para los cuatro dominios. Tambien se alineo el modelo de seguridad global del caso: **WAF** a nivel del LB, **API Discovery** y **API Protection** opcionales a nivel global, carga condicional de specs OpenAPI para **Arcadia** y **crAPI**, limpieza de ambos objetos en destroy y validaciones de readiness sobre origen y endpoints publicos. Se actualizo la guía [README](readme/README-sec-re-aws-todas-apply.md) y el arbol Terraform autocontenido en `todas/`.
 
 ### 2026-03-26
 - **API + WAF + Bot Defense en RE AWS** (`waf-re-aws-apply.yml` / `waf-re-aws-destroy.yml`): workflows renombrados a `API + WAF + BD` para reflejar que incluyen **WAF**, **API Discovery**, **API Protection** y **Bot Defense** (opcional vía variable `XC_BOT_DEFENSE`). Se agregó `VOLT_API_P12_FILE` al job `terraform_xc` de ambos workflows para correcta autenticación del provider de F5 XC.

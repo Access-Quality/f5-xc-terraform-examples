@@ -7,7 +7,7 @@ output "xc_waf_name" {
 }
 
 output "lb_domains" {
-  value = [var.arcadia_domain, var.dvwa_domain, var.boutique_domain]
+  value = [var.arcadia_domain, var.dvwa_domain, var.boutique_domain, var.crapi_domain]
 }
 
 output "lb_cname" {

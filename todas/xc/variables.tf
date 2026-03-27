@@ -49,9 +49,21 @@ variable "xc_waf_blocking" {
   default     = true
 }
 
-variable "xc_api_spec" {
+variable "xc_api_discovery" {
+  type        = bool
+  description = "Enable API Discovery globally on the shared HTTP Load Balancer"
+  default     = false
+}
+
+variable "xc_api_protection" {
+  type        = bool
+  description = "Enable API Protection globally on the shared HTTP Load Balancer"
+  default     = false
+}
+
+variable "xc_api_specs" {
   type        = list(string)
-  description = "Internal F5 XC object store path(s) for the Arcadia swagger spec (set by workflow after upload)"
+  description = "Internal F5 XC object store path(s) for the Arcadia/crAPI OpenAPI specs uploaded by the workflow"
   default     = []
 }
 
