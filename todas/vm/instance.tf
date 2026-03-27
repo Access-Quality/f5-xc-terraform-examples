@@ -16,6 +16,7 @@ resource "aws_instance" "arcadia" {
     dvwa_domain     = var.dvwa_domain
     boutique_domain = var.boutique_domain
     crapi_domain    = var.crapi_domain
+    mailhog_domain  = var.mailhog_domain
   }))
   user_data_replace_on_change = true
 

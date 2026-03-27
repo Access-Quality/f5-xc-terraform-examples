@@ -43,6 +43,11 @@ variable "crapi_domain" {
   description = "FQDN for crAPI (e.g. crapi-aws.prod.example.com)"
 }
 
+variable "mailhog_domain" {
+  type        = string
+  description = "FQDN for Mailhog (e.g. mailhog-aws.prod.example.com)"
+}
+
 variable "xc_waf_blocking" {
   type        = bool
   description = "Set WAF to blocking (true) or monitoring (false) mode"

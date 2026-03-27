@@ -1,13 +1,14 @@
-# Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS - Deploy
+# Seguridad en RE para Arcadia + DVWA + Boutique + crAPI + Mailhog en AWS - Deploy
 
-Este workflow despliega una solucion de **seguridad en el Regional Edge (RE) de F5 Distributed Cloud** para **cuatro aplicaciones distintas alojadas en una sola instancia EC2 de AWS**:
+Este workflow despliega una solucion de **seguridad en el Regional Edge (RE) de F5 Distributed Cloud** para **cinco aplicaciones distintas alojadas en una sola instancia EC2 de AWS**:
 
 - **Arcadia Finance**, publicada por `ARCADIA_DOMAIN`
 - **DVWA**, publicada por `DVWA_DOMAIN`
 - **Online Boutique**, publicada por `BOUTIQUE_DOMAIN`
 - **crAPI**, publicada por `CRAPI_DOMAIN`
+- **Mailhog**, publicada por `MAILHOG_DOMAIN`
 
-Las cuatro aplicaciones comparten la misma VM. Dentro de la instancia corre un **nginx instalado en el host** que enruta por `Host` hacia contenedores Docker publicados solo en `127.0.0.1`. En F5 XC se crea **un unico HTTP Load Balancer** que anuncia los cuatro FQDN y apunta a un solo origin pool.
+Las cinco aplicaciones comparten la misma VM. Dentro de la instancia corre un **nginx instalado en el host** que enruta por `Host` hacia contenedores Docker publicados solo en `127.0.0.1`. En F5 XC se crea **un unico HTTP Load Balancer** que anuncia los cinco FQDN y apunta a un solo origin pool.
 
 El caso esta pensado para demostrar, en una topologia simple y barata de operar, las siguientes capacidades:
 
@@ -15,6 +16,7 @@ El caso esta pensado para demostrar, en una topologia simple y barata de operar,
 - API Discovery global sobre el load balancer compartido
 - API Protection global en modo report usando specs de Arcadia y/o crAPI
 - Bot Defense opcional sobre Arcadia en modo flag
+- acceso publico a Mailhog para revisar el correo de laboratorio de crAPI
 - Multiples aplicaciones expuestas por FQDN sin EKS ni Kubernetes
 - Provisionamiento y destruccion completos con GitHub Actions + Terraform
 
@@ -29,7 +31,7 @@ El workflow crea tres capas desacopladas:
 | Capa | Directorio | Funcion |
 | --- | --- | --- |
 | Infra AWS | `todas/infra` | VPC, subnet publica, internet gateway, rutas, security group y recursos base |
-| VM compartida | `todas/vm` | EC2 + EIP + Docker + nginx + Arcadia + DVWA + Boutique + crAPI |
+| VM compartida | `todas/vm` | EC2 + EIP + Docker + nginx + Arcadia + DVWA + Boutique + crAPI + Mailhog |
 | Seguridad XC | `todas/xc` | Namespace, health check, origin pool, HTTP Load Balancer, WAF, API Security y Bot Defense |
 
 ### Que NO usa este caso
@@ -81,6 +83,7 @@ Cliente / Internet
 |    - server_name DVWA_DOMAIN     -> 127.0.0.1:18084           |
 |    - server_name BOUTIQUE_DOMAIN -> 127.0.0.1:18085           |
 |    - server_name CRAPI_DOMAIN    -> 127.0.0.1:18086           |
+|    - server_name MAILHOG_DOMAIN  -> 127.0.0.1:18087           |
 |                                                               |
 |  Docker network: internal                                     |
 |    - Arcadia containers                                       |
@@ -107,6 +110,7 @@ El proxy ya no corre en un contenedor. Ahora se instala directamente en Amazon L
 | DVWA | `DVWA_DOMAIN` | `http://DVWA_DOMAIN/` | WAF, pruebas OWASP Web Top 10, brute force, injection |
 | Online Boutique | `BOUTIQUE_DOMAIN` | `http://BOUTIQUE_DOMAIN/` | WAF, pruebas HTTP frontend, abuso y rate limiting |
 | crAPI | `CRAPI_DOMAIN` | `http://CRAPI_DOMAIN/` | WAF, API Discovery, API Protection, pruebas OWASP API Top 10 |
+| Mailhog | `MAILHOG_DOMAIN` | `http://MAILHOG_DOMAIN/` | Acceso web a los correos de laboratorio generados por crAPI |
 
 ### Rutas utiles por aplicacion
 
@@ -116,6 +120,7 @@ El proxy ya no corre en un contenedor. Ahora se instala directamente en Amazon L
 | DVWA | `/`, `/login.php`, `/setup.php`, `/vulnerabilities/brute/` |
 | Boutique | `/` |
 | crAPI | `/`, `/identity/api/auth/login`, `/workshop/api/`, `/community/api/` |
+| Mailhog | `/` |
 
 ---
 
@@ -136,6 +141,7 @@ Los contenedores no quedan expuestos a internet. Todos se publican solo hacia `1
 | DVWA | `127.0.0.1:18084` |
 | Boutique frontend | `127.0.0.1:18085` |
 | crAPI web | `127.0.0.1:18086` |
+| Mailhog web | `127.0.0.1:18087` |
 
 ### Routing de nginx por host header
 
@@ -145,6 +151,7 @@ Los contenedores no quedan expuestos a internet. Todos se publican solo hacia `1
 | `DVWA_DOMAIN` | DVWA |
 | `BOUTIQUE_DOMAIN` | Boutique frontend |
 | `CRAPI_DOMAIN` | crAPI web |
+| `MAILHOG_DOMAIN` | Mailhog web |
 
 ### Health checks
 
@@ -161,7 +168,7 @@ El modulo `todas/xc` crea los siguientes objetos principales:
 | Namespace | Contenedor logico para objetos del caso |
 | Health check | Verifica `GET /healthz` con `Host: ARCADIA_DOMAIN` |
 | Origin pool | Apunta al Elastic IP del EC2 en el puerto `80` |
-| HTTP Load Balancer | Publica los cuatro dominios en el RE |
+| HTTP Load Balancer | Publica los cinco dominios en el RE |
 | App Firewall | WAF global del caso |
 | API Definition | Solo se crea si hay una o mas specs cargadas |
 | Bot Defense | Solo se inserta si `XC_BOT_DEFENSE=true` |
@@ -292,6 +299,7 @@ Los cuatro FQDN deben resolver hacia el CNAME o VIP publica del HTTP Load Balanc
 | `DVWA_DOMAIN` | `dvwa.example.com` | FQDN de DVWA |
 | `BOUTIQUE_DOMAIN` | `boutique.example.com` | FQDN de Boutique |
 | `CRAPI_DOMAIN` | `crapi.example.com` | FQDN de crAPI |
+| `MAILHOG_DOMAIN` | `mailhog.example.com` | FQDN de Mailhog |
 
 ### Variables de seguridad
 
@@ -415,6 +423,7 @@ Validaciones que hace este job antes de continuar:
 - `GET /` con `Host: DVWA_DOMAIN` -> `200`, `301` o `302`
 - `GET /` con `Host: BOUTIQUE_DOMAIN` -> `200`
 - `GET /` con `Host: CRAPI_DOMAIN` -> `200`
+- `GET /` con `Host: MAILHOG_DOMAIN` -> `200`
 
 ### Job 3: `terraform_xc`
 
@@ -442,6 +451,7 @@ Validaciones publicas finales:
 - `http://DVWA_DOMAIN/` -> `200`, `301` o `302`
 - `http://BOUTIQUE_DOMAIN/` -> `200`
 - `http://CRAPI_DOMAIN/` -> `200`
+- `http://MAILHOG_DOMAIN/` -> `200`
 
 ---
 
@@ -472,7 +482,7 @@ Si el usuario del `.p12` no puede borrar namespaces, el workflow deja una advert
 ### Desde GitHub Actions
 
 1. Ir a **Actions**
-2. Seleccionar `Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS - Deploy`
+2. Seleccionar `Seguridad en RE para Arcadia + DVWA + Boutique + crAPI + Mailhog en AWS - Deploy`
 3. Ejecutar `Run workflow`
 4. Esperar a que finalicen los tres jobs
 5. Revisar el job `terraform_xc` para obtener confirmacion de que los endpoints publicos responden
@@ -482,7 +492,7 @@ Si el usuario del `.p12` no puede borrar namespaces, el workflow deja una advert
 - `terraform_infra` termina en verde
 - `terraform_vm` termina en verde y las esperas de origen pasan
 - `terraform_xc` termina en verde y las esperas publicas pasan
-- las cuatro aplicaciones responden desde internet por su FQDN
+- las cinco aplicaciones responden desde internet por su FQDN
 
 ---
 
@@ -497,6 +507,7 @@ curl -i -H "Host: ${ARCADIA_DOMAIN}"  http://<VM_IP>/
 curl -i -H "Host: ${DVWA_DOMAIN}"     http://<VM_IP>/
 curl -i -H "Host: ${BOUTIQUE_DOMAIN}" http://<VM_IP>/
 curl -i -H "Host: ${CRAPI_DOMAIN}"    http://<VM_IP>/
+curl -i -H "Host: ${MAILHOG_DOMAIN}"  http://<VM_IP>/
 ```
 
 ### Validacion publica via XC
@@ -506,6 +517,7 @@ curl -i http://${ARCADIA_DOMAIN}/
 curl -i http://${DVWA_DOMAIN}/
 curl -i http://${BOUTIQUE_DOMAIN}/
 curl -i http://${CRAPI_DOMAIN}/
+curl -i http://${MAILHOG_DOMAIN}/
 ```
 
 ### Validacion de health checks
@@ -515,6 +527,7 @@ curl -i -H "Host: ${ARCADIA_DOMAIN}" http://<VM_IP>/healthz
 curl -i -H "Host: ${DVWA_DOMAIN}" http://<VM_IP>/healthz
 curl -i -H "Host: ${BOUTIQUE_DOMAIN}" http://<VM_IP>/healthz
 curl -i -H "Host: ${CRAPI_DOMAIN}" http://<VM_IP>/healthz
+curl -i -H "Host: ${MAILHOG_DOMAIN}" http://<VM_IP>/healthz
 ```
 
 ### Validacion de API Protection en modo report
@@ -567,6 +580,14 @@ Casos sugeridos:
 - validacion OpenAPI en modo report
 - pruebas de BOLA / IDOR
 - llamadas con token invalido o parametros no esperados
+
+### Mailhog
+
+Casos sugeridos:
+
+- revisar correos generados por el flujo de recuperacion o activacion de crAPI
+- validar que crAPI sigue resolviendo `mailhog-web:8025` internamente aunque ahora tambien exista acceso publico
+- usar la UI web para inspeccionar mensajes sin entrar por SSH a la EC2
 
 ---
 
@@ -653,7 +674,17 @@ Actualmente el provider marca algunos argumentos como deprecados. Son warnings c
 
 ---
 
-## 19. Recomendacion operativa final
+## 19. URL publica de Mailhog
+
+Una vez desplegado el cambio y configurado DNS, la URL esperada de Mailhog es:
+
+- `http://MAILHOG_DOMAIN/`
+
+Esto publica la interfaz web de Mailhog sin necesidad de SSH ni tuneles locales.
+
+---
+
+## 20. Recomendacion operativa final
 
 Si tu objetivo es dejar este caso listo para demos, validacion funcional y pruebas controladas sin romper la navegacion legitima, la combinacion recomendada es:
 
@@ -670,4 +701,4 @@ Con esa combinacion obtienes:
 - Bot Defense en modo flag para Arcadia login
 - Discovery de endpoints API
 - Validacion de schema OpenAPI en modo report
-- cobertura funcional sobre las cuatro aplicaciones con un solo LB
+- cobertura funcional sobre las cinco aplicaciones con un solo LB

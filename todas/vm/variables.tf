@@ -38,3 +38,8 @@ variable "crapi_domain" {
   type        = string
   description = "FQDN used to access crAPI through the reverse proxy"
 }
+
+variable "mailhog_domain" {
+  type        = string
+  description = "FQDN used to access Mailhog through the reverse proxy"
+}

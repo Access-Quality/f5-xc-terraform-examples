@@ -1,4 +1,4 @@
-name: "Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS - Destroy"
+name: "Seguridad en RE para Arcadia + DVWA + Boutique + crAPI + Mailhog en AWS - Destroy"
 
 # IMPORTANT: The three Terraform Cloud workspaces used by this workflow
 # (INFRA, VM, XC) must be configured with execution mode "Local" so that
@@ -26,6 +26,7 @@ jobs:
       TF_VAR_dvwa_domain:              ${{ vars.DVWA_DOMAIN }}
       TF_VAR_boutique_domain:          ${{ vars.BOUTIQUE_DOMAIN }}
       TF_VAR_crapi_domain:             ${{ vars.CRAPI_DOMAIN }}
+      TF_VAR_mailhog_domain:           ${{ vars['MAILHOG_DOMAIN'] }}
       TF_VAR_xc_waf_blocking:          ${{ vars.XC_WAF_BLOCKING }}
       TF_VAR_xc_bot_defense:           ${{ vars.XC_BOT_DEFENSE }}
       TF_VAR_xc_api_discovery:         ${{ vars.XC_API_DISCOVERY }}
@@ -130,7 +131,7 @@ jobs:
           fi
 
   terraform_vm:
-    name: "AWS VM (Arcadia + DVWA + Boutique + crAPI)"
+    name: "AWS VM (Arcadia + DVWA + Boutique + crAPI + Mailhog)"
     runs-on: ubuntu-latest
     needs: terraform_xc
     defaults:
@@ -145,6 +146,7 @@ jobs:
       TF_VAR_dvwa_domain:              ${{ vars.DVWA_DOMAIN }}
       TF_VAR_boutique_domain:          ${{ vars.BOUTIQUE_DOMAIN }}
       TF_VAR_crapi_domain:             ${{ vars.CRAPI_DOMAIN }}
+      TF_VAR_mailhog_domain:           ${{ vars['MAILHOG_DOMAIN'] }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

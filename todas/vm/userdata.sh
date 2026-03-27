@@ -110,6 +110,23 @@ server {
         proxy_pass http://127.0.0.1:18086;
     }
 }
+
+server {
+    listen 80;
+    server_name ${mailhog_domain};
+
+    location = /healthz {
+        access_log off;
+        return 200;
+    }
+
+    location / {
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://127.0.0.1:18087;
+    }
+}
 NGINXCONF
 
 sudo nginx -t
@@ -189,6 +206,7 @@ docker run -dit --restart unless-stopped -h mongodb --name mongodb --net interna
     -v crapi-mongodb-data:/data/db \
     mongo:5.0
 docker run -dit --restart unless-stopped -h mailhog --name mailhog --net internal --network-alias mailhog-web \
+    -p 127.0.0.1:18087:8025 \
     -e MH_MONGO_URI=admin:crapisecretpassword@mongodb:27017 \
     -e MH_STORAGE=mongodb \
     crapi/mailhog:latest
