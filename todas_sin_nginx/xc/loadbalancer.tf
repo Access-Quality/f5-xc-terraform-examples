@@ -25,7 +25,7 @@ resource "volterra_origin_pool" "origins" {
   for_each = local.origin_pools
 
   depends_on  = [null_resource.namespace_ready]
-  name        = format("%s-%s-xcop-%s", local.project_prefix, each.key, local.build_suffix)
+  name        = format("%s-%s-xcop-%s", local.project_prefix, replace(each.key, "_", "-"), local.build_suffix)
   namespace   = var.xc_namespace
   description = format("Origin pool for %s on %s:%s", each.key, local.origin_ip, each.value.port)
 
