@@ -5,16 +5,16 @@ output "vm_ip" {
 }
 
 output "origin_port" {
-  value       = 8080
-  description = "Port where the shared nginx reverse proxy is listening"
+  value       = 80
+  description = "Port where the host nginx reverse proxy is listening"
 }
 
 output "arcadia_port" {
-  value       = 8080
-  description = "Port where Arcadia is exposed through the shared nginx reverse proxy"
+  value       = 80
+  description = "Port where Arcadia is exposed through the host nginx reverse proxy"
 }
 
 output "dvwa_port" {
-  value       = 8080
-  description = "Port where DVWA is exposed through the shared nginx reverse proxy"
+  value       = 80
+  description = "Port where DVWA is exposed through the host nginx reverse proxy"
 }
