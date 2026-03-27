@@ -114,6 +114,39 @@ jobs:
       - name: Terraform Apply
         run: terraform apply -auto-approve -input=false
 
+      - name: Wait for shared VM origin
+        run: |
+          VM_IP=$(terraform output -raw vm_ip)
+          echo "VM_IP=${VM_IP}" >> "$GITHUB_ENV"
+
+          wait_for_status() {
+            local name="$1"
+            local host_header="$2"
+            local path="$3"
+            local expected_regex="$4"
+
+            for attempt in $(seq 1 40); do
+              code=$(curl -s -o /tmp/resp.out -w "%{http_code}" --max-time 10 -H "Host: ${host_header}" "http://${VM_IP}${path}" || true)
+              echo "${name}: intento ${attempt}, HTTP ${code}"
+              if printf '%s' "$code" | grep -Eq "$expected_regex"; then
+                echo "${name} listo con HTTP ${code}"
+                return 0
+              fi
+              sleep 15
+            done
+
+            echo "ERROR: ${name} no quedo listo a tiempo"
+            echo "Ultima respuesta:"
+            cat /tmp/resp.out || true
+            return 1
+          }
+
+          wait_for_status "Origin healthz" "${{ vars.ARCADIA_DOMAIN }}" "/healthz" "^200$"
+          wait_for_status "Arcadia" "${{ vars.ARCADIA_DOMAIN }}" "/" "^200$"
+          wait_for_status "DVWA" "${{ vars.DVWA_DOMAIN }}" "/" "^(200|301|302)$"
+          wait_for_status "Boutique" "${{ vars.BOUTIQUE_DOMAIN }}" "/" "^200$"
+          wait_for_status "crAPI" "${{ vars.CRAPI_DOMAIN }}" "/" "^200$"
+
   terraform_xc:
     name: "F5XC WAF"
     runs-on: ubuntu-latest
@@ -237,3 +270,31 @@ jobs:
 
       - name: Terraform Apply
         run: terraform apply -auto-approve -input=false
+
+      - name: Verify public endpoints
+        run: |
+          wait_for_public_status() {
+            local name="$1"
+            local url="$2"
+            local expected_regex="$3"
+
+            for attempt in $(seq 1 30); do
+              code=$(curl -s -o /tmp/public.out -w "%{http_code}" --max-time 15 "$url" || true)
+              echo "${name}: intento ${attempt}, HTTP ${code}"
+              if printf '%s' "$code" | grep -Eq "$expected_regex"; then
+                echo "${name} publico listo con HTTP ${code}"
+                return 0
+              fi
+              sleep 10
+            done
+
+            echo "ERROR: ${name} publico no quedo listo a tiempo"
+            echo "Ultima respuesta:"
+            cat /tmp/public.out || true
+            return 1
+          }
+
+          wait_for_public_status "Arcadia" "http://${{ vars.ARCADIA_DOMAIN }}/" "^200$"
+          wait_for_public_status "DVWA" "http://${{ vars.DVWA_DOMAIN }}/" "^(200|301|302)$"
+          wait_for_public_status "Boutique" "http://${{ vars.BOUTIQUE_DOMAIN }}/" "^200$"
+          wait_for_public_status "crAPI" "http://${{ vars.CRAPI_DOMAIN }}/" "^200$"
