@@ -541,7 +541,7 @@ Una vez que el workflow finaliza correctamente, la aplicación crAPI queda expue
    La respuesta incluye un mensaje de verificación. crAPI envía un email de confirmación interno.
 
 2. **Verificar la cuenta con Mailhog:**
-   Mailhog captura todos los emails enviados por crAPI (verificación de cuenta, reset de contraseña, etc.).
+  Mailhog captura todos los emails enviados por crAPI (verificación de cuenta, reset de contraseña, etc.). En este laboratorio se usa solo como herramienta auxiliar para leer esos correos y extraer enlaces o datos del flujo, incluidos datos del vehículo cuando crAPI los expone por email.
 
    > **¿Por qué no funciona `http://<CRAPI_DOMAIN>:8025`?**
    > `CRAPI_DOMAIN` (p.ej. `crapi.digitalvs.com`) apunta al **Regional Edge de F5 XC**, que solo tiene configurado un HTTP Load Balancer en el **puerto 80**. El puerto 8025 no existe en F5 XC y el tráfico es descartado.
@@ -557,7 +557,9 @@ Una vez que el workflow finaliza correctamente, la aplicación crAPI queda expue
    NAME      TYPE           CLUSTER-IP     EXTERNAL-IP                                                               PORT(S)          AGE
    mailhog   LoadBalancer   172.20.x.x     aa739714051cd421f9652bed09553419-1867348507.us-east-1.elb.amazonaws.com   8025:32xxx/TCP   5m
    ```
-   Abrir `http://<EXTERNAL-IP>:8025` en el navegador, buscar el email de verificación y hacer clic en el enlace de confirmación.
+  Abrir `http://<EXTERNAL-IP>:8025` en el navegador, buscar el email correspondiente y usar su contenido para continuar el flujo de crAPI.
+
+  > **Nota:** Mailhog no se trata aquí como objetivo de pruebas de vulnerabilidad. Su función es solo ayudar a observar los mensajes generados por crAPI y obtener datos auxiliares necesarios para seguir con las pruebas sobre la aplicación principal.
 
    ```
    Internet → crapi.digitalvs.com:80 → F5 XC RE → CE → crapi-web:80   ✅ (pasa por XC)
