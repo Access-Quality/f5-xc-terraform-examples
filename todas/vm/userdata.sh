@@ -1,18 +1,18 @@
 #!/bin/bash
 set -ex
 
-# Docker installation (Amazon Linux 2)
+# Docker and nginx installation (Amazon Linux 2)
 sudo yum update -y
 sudo amazon-linux-extras install docker -y
+sudo amazon-linux-extras install nginx1 -y || sudo yum install -y nginx
 sudo service docker start
 sudo usermod -a -G docker ec2-user
 
-# Create nginx reverse proxy config for both applications
-sudo tee /home/ec2-user/default.conf > /dev/null <<'NGINXCONF'
+# Create nginx reverse proxy config on the host so health checks do not depend on Docker DNS.
+sudo tee /etc/nginx/conf.d/default.conf > /dev/null <<'NGINXCONF'
 server {
     listen 80 default_server;
     server_name _;
-    resolver 127.0.0.11 ipv6=off valid=10s;
 
     location = /healthz {
         access_log off;
@@ -25,7 +25,6 @@ server {
 server {
     listen 80;
     server_name ${arcadia_domain};
-    resolver 127.0.0.11 ipv6=off valid=10s;
 
     location = /healthz {
         access_log off;
@@ -33,42 +32,37 @@ server {
     }
 
     location / {
-        set $mainapp_upstream http://mainapp;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_pass $mainapp_upstream;
+        proxy_pass http://127.0.0.1:18080;
     }
 
     location /files {
-        set $backend_upstream http://backend/files/;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_pass $backend_upstream;
+        proxy_pass http://127.0.0.1:18081/files/;
     }
 
     location /api {
-        set $app2_upstream http://app2/api/;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_pass $app2_upstream;
+        proxy_pass http://127.0.0.1:18082/api/;
     }
 
     location /app3 {
-        set $app3_upstream http://app3/app3/;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_pass $app3_upstream;
+        proxy_pass http://127.0.0.1:18083/app3/;
     }
 }
 
 server {
     listen 80;
     server_name ${dvwa_domain};
-    resolver 127.0.0.11 ipv6=off valid=10s;
 
     location = /healthz {
         access_log off;
@@ -76,18 +70,16 @@ server {
     }
 
     location / {
-        set $dvwa_upstream http://dvwa;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_pass $dvwa_upstream;
+        proxy_pass http://127.0.0.1:18084;
     }
 }
 
 server {
     listen 80;
     server_name ${boutique_domain};
-    resolver 127.0.0.11 ipv6=off valid=10s;
 
     location = /healthz {
         access_log off;
@@ -95,18 +87,16 @@ server {
     }
 
     location / {
-        set $boutique_upstream http://frontend:8080;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_pass $boutique_upstream;
+        proxy_pass http://127.0.0.1:18085;
     }
 }
 
 server {
     listen 80;
     server_name ${crapi_domain};
-    resolver 127.0.0.11 ipv6=off valid=10s;
 
     location = /healthz {
         access_log off;
@@ -114,14 +104,17 @@ server {
     }
 
     location / {
-        set $crapi_upstream http://crapi-web:80;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_pass $crapi_upstream;
+        proxy_pass http://127.0.0.1:18086;
     }
 }
 NGINXCONF
+
+sudo nginx -t
+sudo systemctl enable nginx
+sudo systemctl restart nginx
 
 sudo tee /home/ec2-user/crapi-jwks.json > /dev/null <<'JWKS'
 {
@@ -148,11 +141,11 @@ JWKS
 docker network inspect internal >/dev/null 2>&1 || docker network create internal
 docker volume inspect crapi-postgres-data >/dev/null 2>&1 || docker volume create crapi-postgres-data
 docker volume inspect crapi-mongodb-data >/dev/null 2>&1 || docker volume create crapi-mongodb-data
-docker run -dit --restart unless-stopped -h mainapp --name mainapp --net internal registry.gitlab.com/arcadia-application/main-app/mainapp:latest
-docker run -dit --restart unless-stopped -h backend --name backend --net internal registry.gitlab.com/arcadia-application/back-end/backend:latest
-docker run -dit --restart unless-stopped -h app2 --name app2 --net internal registry.gitlab.com/arcadia-application/app2/app2:latest
-docker run -dit --restart unless-stopped -h app3 --name app3 --net internal registry.gitlab.com/arcadia-application/app3/app3:latest
-docker run -dit --restart unless-stopped -h dvwa --name dvwa --net internal vulnerables/web-dvwa
+docker run -dit --restart unless-stopped -h mainapp --name mainapp --net internal -p 127.0.0.1:18080:80 registry.gitlab.com/arcadia-application/main-app/mainapp:latest
+docker run -dit --restart unless-stopped -h backend --name backend --net internal -p 127.0.0.1:18081:80 registry.gitlab.com/arcadia-application/back-end/backend:latest
+docker run -dit --restart unless-stopped -h app2 --name app2 --net internal -p 127.0.0.1:18082:80 registry.gitlab.com/arcadia-application/app2/app2:latest
+docker run -dit --restart unless-stopped -h app3 --name app3 --net internal -p 127.0.0.1:18083:80 registry.gitlab.com/arcadia-application/app3/app3:latest
+docker run -dit --restart unless-stopped -h dvwa --name dvwa --net internal -p 127.0.0.1:18084:80 vulnerables/web-dvwa
 docker run -dit --restart unless-stopped -h redis-cart --name redis-cart --net internal redis:alpine
 docker run -dit --restart unless-stopped -h emailservice --name emailservice --net internal -e PORT=8080 -e DISABLE_PROFILER=1 gcr.io/google-samples/microservices-demo/emailservice:v0.8.0
 docker run -dit --restart unless-stopped -h paymentservice --name paymentservice --net internal -e PORT=50051 -e DISABLE_PROFILER=1 gcr.io/google-samples/microservices-demo/paymentservice:v0.8.0
@@ -172,6 +165,7 @@ docker run -dit --restart unless-stopped -h checkoutservice --name checkoutservi
     -e CART_SERVICE_ADDR=cartservice:7070 \
     gcr.io/google-samples/microservices-demo/checkoutservice:v0.8.0
 docker run -dit --restart unless-stopped -h frontend --name frontend --net internal \
+    -p 127.0.0.1:18085:8080 \
     -e PORT=8080 \
     -e PRODUCT_CATALOG_SERVICE_ADDR=productcatalogservice:3550 \
     -e CURRENCY_SERVICE_ADDR=currencyservice:7000 \
@@ -182,9 +176,6 @@ docker run -dit --restart unless-stopped -h frontend --name frontend --net inter
     -e AD_SERVICE_ADDR=adservice:9555 \
     -e ENABLE_PROFILER=0 \
     gcr.io/google-samples/microservices-demo/frontend:v0.8.0
-docker run -dit --restart unless-stopped -h nginx --name nginx --net internal -p 8080:80 \
-    -v /home/ec2-user/default.conf:/etc/nginx/conf.d/default.conf \
-    registry.gitlab.com/arcadia-application/nginx/nginxoss:latest
 
 docker run -dit --restart unless-stopped -h postgresdb --name postgresdb --net internal \
     -e POSTGRES_USER=admin \
@@ -266,6 +257,7 @@ docker run -dit --restart unless-stopped -h crapi-workshop --name crapi-workshop
     -e SERVER_PORT=8000 \
     crapi/crapi-workshop:develop
 docker run -dit --restart unless-stopped -h crapi-web --name crapi-web --net internal \
+    -p 127.0.0.1:18086:80 \
     -e COMMUNITY_SERVICE=crapi-community:8087 \
     -e IDENTITY_SERVICE=crapi-identity:8080 \
     -e WORKSHOP_SERVICE=crapi-workshop:8000 \
