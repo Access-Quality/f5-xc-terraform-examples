@@ -192,10 +192,14 @@ docker run -dit --restart unless-stopped -h mailhog --name mailhog --net interna
     -e MH_MONGO_URI=admin:crapisecretpassword@mongodb:27017 \
     -e MH_STORAGE=mongodb \
     crapi/mailhog:latest
+docker run -dit --restart unless-stopped -h gateway-service --name gateway-service --net internal \
+    -e SERVER_PORT=443 \
+    crapi/gateway-service:develop
 
 sleep 20
 
 docker run -dit --restart unless-stopped -h crapi-identity --name crapi-identity --net internal \
+    -e LOG_LEVEL=INFO \
     -e DB_HOST=postgresdb \
     -e DB_DRIVER=postgresql \
     -e JWT_SECRET=crapi \
@@ -218,12 +222,20 @@ docker run -dit --restart unless-stopped -h crapi-identity --name crapi-identity
     -e JWT_EXPIRATION=604800000 \
     -e SMTP_STARTTLS=true \
     -e SERVER_PORT=8080 \
+    -e API_GATEWAY_URL=https://gateway-service \
+    -e TLS_ENABLED=false \
+    -e TLS_KEYSTORE_TYPE=PKCS12 \
+    -e TLS_KEYSTORE=classpath:certs/server.p12 \
+    -e TLS_KEYSTORE_PASSWORD=passw0rd \
+    -e TLS_KEY_PASSWORD=passw0rd \
+    -e TLS_KEY_ALIAS=identity \
     -v /home/ec2-user/crapi-jwks.json:/.keys/jwks.json:ro \
     crapi/crapi-identity:develop
 
 sleep 10
 
 docker run -dit --restart unless-stopped -h crapi-community --name crapi-community --net internal \
+    -e LOG_LEVEL=INFO \
     -e IDENTITY_SERVICE=crapi-identity:8080 \
     -e DB_HOST=postgresdb \
     -e DB_DRIVER=postgres \
@@ -238,8 +250,10 @@ docker run -dit --restart unless-stopped -h crapi-community --name crapi-communi
     -e MONGO_DB_NAME=crapi \
     -e MONGO_DB_PORT=27017 \
     -e SERVER_PORT=8087 \
+    -e TLS_ENABLED=false \
     crapi/crapi-community:develop
 docker run -dit --restart unless-stopped -h crapi-workshop --name crapi-workshop --net internal \
+    -e LOG_LEVEL=INFO \
     -e IDENTITY_SERVICE=crapi-identity:8080 \
     -e SECRET_KEY=crapi \
     -e DB_HOST=postgresdb \
@@ -255,10 +269,15 @@ docker run -dit --restart unless-stopped -h crapi-workshop --name crapi-workshop
     -e MONGO_DB_PASSWORD=crapisecretpassword \
     -e MONGO_DB_NAME=crapi \
     -e SERVER_PORT=8000 \
+    -e API_GATEWAY_URL=https://gateway-service \
+    -e TLS_ENABLED=false \
     crapi/crapi-workshop:develop
 docker run -dit --restart unless-stopped -h crapi-web --name crapi-web --net internal \
     -p 127.0.0.1:18086:80 \
     -e COMMUNITY_SERVICE=crapi-community:8087 \
     -e IDENTITY_SERVICE=crapi-identity:8080 \
     -e WORKSHOP_SERVICE=crapi-workshop:8000 \
+    -e MAILHOG_WEB_SERVICE=mailhog-web:8025 \
+    -e TLS_ENABLED=false \
+    -e CHATBOT_SERVICE=localhost:9999 \
     crapi/crapi-web:develop
