@@ -455,6 +455,7 @@ Si el backend responde legítimamente con datos de otros usuarios, el problema d
 
 - flujo de correo de recuperación
 - dependencia funcional entre crAPI y Mailhog
+- disponibilidad de datos auxiliares dentro del correo para continuar pruebas sobre crAPI
 
 ### Cómo probarlo
 
@@ -468,6 +469,14 @@ Si el backend responde legítimamente con datos de otros usuarios, el problema d
 - que crAPI genera el correo correctamente
 - que Mailhog sigue siendo accesible pública y funcionalmente
 - que no se exponen secretos innecesarios en el contenido del email
+
+### Nota importante
+
+Mailhog **no es el objetivo de la prueba de seguridad**. En este laboratorio se usa como apoyo operativo para:
+
+- leer correos generados por crAPI
+- obtener enlaces, tokens o datos auxiliares necesarios para continuar el flujo
+- facilitar la obtencion de informacion relacionada con vehiculos o cuentas cuando el propio flujo de crAPI la expone por correo
 
 ### Mitigación con F5 DCS
 

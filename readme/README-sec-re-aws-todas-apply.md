@@ -601,9 +601,11 @@ Guia detallada:
 
 Casos sugeridos:
 
-- revisar correos generados por el flujo de recuperacion o activacion de crAPI
+- revisar correos generados por flujos funcionales de crAPI
+- usar la UI web para obtener datos auxiliares que luego se usan en pruebas sobre crAPI, por ejemplo identificadores o enlaces del flujo
 - validar que crAPI sigue resolviendo `mailhog-web:8025` internamente aunque ahora tambien exista acceso publico
-- usar la UI web para inspeccionar mensajes sin entrar por SSH a la EC2
+
+Nota: **Mailhog no se usa aqui como objetivo de pruebas de vulnerabilidad**. Su papel es servir como herramienta auxiliar para observar mensajes de crAPI y extraer datos necesarios para validar casos sobre la aplicacion principal.
 
 ---
 
