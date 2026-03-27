@@ -46,6 +46,15 @@ El workflow crea tres capas desacopladas:
 
 La decision de usar **un solo origen**, **un solo nginx** y **un solo HTTP Load Balancer** simplifica el laboratorio y reduce puntos de falla. El enrutamiento por `Host` conserva mejor el comportamiento nativo de cada aplicacion que un path-based routing artificial.
 
+### Variante relacionada
+
+Si quieres la misma idea general de **una sola VM compartida** y **un solo HTTP Load Balancer**, pero **sin nginx en el host**, revisa el **caso 9** en `readme/README-sec-re-aws-todas-sin-nginx-apply.md`.
+
+La diferencia principal es esta:
+
+- **caso 8**: nginx concentra el trafico en `:80` y hace el routing localmente en la VM
+- **caso 9**: no usa nginx; XC hace el routing por `Host` y `path` hacia varios origin pools sobre la misma VM
+
 ---
 
 ## 2. Arquitectura final

@@ -1,0 +1,369 @@
+name: "Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS - Deploy sin nginx"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  terraform_infra:
+    name: "AWS Infra"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./todas_sin_nginx/infra
+    env:
+      AWS_ACCESS_KEY_ID:            ${{ secrets.AWS_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY:        ${{ secrets.AWS_SECRET_KEY }}
+      TF_VAR_tf_cloud_organization: ${{ secrets.TF_CLOUD_ORGANIZATION }}
+      TF_VAR_aws_region:            ${{ vars.AWS_REGION }}
+      TF_VAR_project_prefix:        ${{ format('{0}-sin-nginx', vars.PROJECT_PREFIX) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Setup Terraform Backend
+        run: |
+          cat > backend.tf << EOF
+          terraform {
+            cloud {
+              organization = "${{ secrets.TF_CLOUD_ORGANIZATION }}"
+              workspaces {
+                name = "sec-re-aws-todas-sin-nginx-infra"
+              }
+            }
+          }
+          EOF
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Validate
+        run: terraform validate -no-color
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve -input=false
+
+  terraform_vm:
+    name: "AWS VM sin nginx"
+    runs-on: ubuntu-latest
+    needs: terraform_infra
+    defaults:
+      run:
+        working-directory: ./todas_sin_nginx/vm
+    env:
+      AWS_ACCESS_KEY_ID:               ${{ secrets.AWS_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY:           ${{ secrets.AWS_SECRET_KEY }}
+      TF_VAR_tf_cloud_organization:    ${{ secrets.TF_CLOUD_ORGANIZATION }}
+      TF_VAR_tf_cloud_workspace_infra: sec-re-aws-todas-sin-nginx-infra
+      TF_VAR_arcadia_domain:           ${{ vars.ARCADIA_DOMAIN }}
+      TF_VAR_dvwa_domain:              ${{ vars.DVWA_DOMAIN }}
+      TF_VAR_boutique_domain:          ${{ vars.BOUTIQUE_DOMAIN }}
+      TF_VAR_crapi_domain:             ${{ vars.CRAPI_DOMAIN }}
+      TF_VAR_mailhog_domain:           ${{ vars['MAILHOG_DOMAIN'] }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Extract SSH public key
+        run: |
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/id_rsa
+          chmod 600 /tmp/id_rsa
+          SSH_PUBLIC_KEY=$(ssh-keygen -y -f /tmp/id_rsa)
+          rm -f /tmp/id_rsa
+          echo "TF_VAR_ssh_key=${SSH_PUBLIC_KEY}" >> $GITHUB_ENV
+
+      - name: Setup Terraform Backend
+        run: |
+          cat > backend.tf << EOF
+          terraform {
+            cloud {
+              organization = "${{ secrets.TF_CLOUD_ORGANIZATION }}"
+              workspaces {
+                name = "sec-re-aws-todas-sin-nginx-vm"
+              }
+            }
+          }
+          EOF
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Validate
+        run: terraform validate -no-color
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve -input=false
+
+      - name: Wait for shared VM origin
+        run: |
+          VM_IP=$(terraform output -raw vm_ip)
+          echo "VM_IP=${VM_IP}" >> "$GITHUB_ENV"
+
+          wait_for_port() {
+            local name="$1"
+            local port="$2"
+
+            for attempt in $(seq 1 40); do
+              if timeout 5 bash -c "cat < /dev/null > /dev/tcp/${VM_IP}/${port}" 2>/dev/null; then
+                echo "${name}: puerto ${port} listo"
+                return 0
+              fi
+              echo "${name}: intento ${attempt}, puerto ${port} aun no disponible"
+              sleep 15
+            done
+
+            echo "ERROR: ${name} no quedo listo a tiempo"
+            return 1
+          }
+
+          wait_for_http() {
+            local name="$1"
+            local port="$2"
+            local host_header="$3"
+            local path="$4"
+            local expected_regex="$5"
+
+            for attempt in $(seq 1 40); do
+              code=$(curl -s -o /tmp/resp.out -w "%{http_code}" --max-time 10 -H "Host: ${host_header}" "http://${VM_IP}:${port}${path}" || true)
+              echo "${name}: intento ${attempt}, HTTP ${code}"
+              if printf '%s' "$code" | grep -Eq "$expected_regex"; then
+                echo "${name} listo con HTTP ${code}"
+                return 0
+              fi
+              sleep 15
+            done
+
+            echo "ERROR: ${name} no quedo listo a tiempo"
+            echo "Ultima respuesta:"
+            cat /tmp/resp.out || true
+            return 1
+          }
+
+          wait_for_http "Arcadia main" "18080" "${{ vars.ARCADIA_DOMAIN }}" "/" "^200$"
+          wait_for_port "Arcadia files" "18081"
+          wait_for_port "Arcadia api" "18082"
+          wait_for_port "Arcadia app3" "18083"
+          wait_for_http "DVWA" "18084" "${{ vars.DVWA_DOMAIN }}" "/" "^(200|301|302)$"
+          wait_for_http "Boutique" "18085" "${{ vars.BOUTIQUE_DOMAIN }}" "/" "^200$"
+          wait_for_http "crAPI" "18086" "${{ vars.CRAPI_DOMAIN }}" "/" "^200$"
+          wait_for_http "Mailhog" "18087" "${{ vars['MAILHOG_DOMAIN'] }}" "/" "^200$"
+
+  terraform_xc:
+    name: "F5XC WAF"
+    runs-on: ubuntu-latest
+    needs: terraform_vm
+    defaults:
+      run:
+        working-directory: ./todas_sin_nginx/xc
+    env:
+      TF_VAR_tf_cloud_organization:    ${{ secrets.TF_CLOUD_ORGANIZATION }}
+      TF_VAR_tf_cloud_workspace_infra: sec-re-aws-todas-sin-nginx-infra
+      TF_VAR_tf_cloud_workspace_vm:    sec-re-aws-todas-sin-nginx-vm
+      TF_VAR_api_url:                  ${{ secrets.XC_API_URL }}
+      TF_VAR_xc_namespace:             ${{ vars.XC_NAMESPACE }}
+      TF_VAR_arcadia_domain:           ${{ vars.ARCADIA_DOMAIN }}
+      TF_VAR_dvwa_domain:              ${{ vars.DVWA_DOMAIN }}
+      TF_VAR_boutique_domain:          ${{ vars.BOUTIQUE_DOMAIN }}
+      TF_VAR_crapi_domain:             ${{ vars.CRAPI_DOMAIN }}
+      TF_VAR_mailhog_domain:           ${{ vars['MAILHOG_DOMAIN'] }}
+      TF_VAR_xc_waf_blocking:          ${{ vars.XC_WAF_BLOCKING }}
+      TF_VAR_xc_bot_defense:           ${{ vars.XC_BOT_DEFENSE }}
+      TF_VAR_xc_api_discovery:         ${{ vars.XC_API_DISCOVERY }}
+      TF_VAR_xc_api_protection:        ${{ vars.XC_API_PROTECTION }}
+      TF_VAR_xc_api_specs:             '[]'
+      VES_P12_PASSWORD:                ${{ secrets.XC_P12_PASSWORD }}
+      VOLT_API_P12_FILE:               api.p12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Setup Terraform Backend
+        run: |
+          cat > backend.tf << EOF
+          terraform {
+            cloud {
+              organization = "${{ secrets.TF_CLOUD_ORGANIZATION }}"
+              workspaces {
+                name = "sec-re-aws-todas-sin-nginx-xc"
+              }
+            }
+          }
+          EOF
+          echo "${{ secrets.XC_API_P12_FILE }}" | base64 -d > api.p12
+
+      - name: Create XC Namespace if not exists
+        run: |
+          XC_API_BASE=$(echo "${{ secrets.XC_API_URL }}" | sed 's|/api$||')
+          openssl pkcs12 -legacy -in api.p12 -passin pass:"${{ secrets.XC_P12_PASSWORD }}" -nokeys -clcerts -out /tmp/client.crt 2>/dev/null
+          openssl pkcs12 -legacy -in api.p12 -passin pass:"${{ secrets.XC_P12_PASSWORD }}" -nocerts -nodes -out /tmp/client.key 2>/dev/null
+          if [ ! -s /tmp/client.crt ] || [ ! -s /tmp/client.key ]; then
+            echo "ERROR: Failed to extract cert/key from P12"
+            exit 1
+          fi
+          HTTP_CODE=$(curl -s -o /tmp/ns_response.json -w "%{http_code}" \
+            --cert /tmp/client.crt \
+            --key /tmp/client.key \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -d "{\"metadata\":{\"name\":\"${{ vars.XC_NAMESPACE }}\",\"namespace\":\"\"},\"spec\":{}}" \
+            "${XC_API_BASE}/api/web/namespaces")
+          rm -f /tmp/client.crt /tmp/client.key
+          echo "Response code: ${HTTP_CODE}"
+          cat /tmp/ns_response.json
+          if [ "${HTTP_CODE}" != "200" ] && [ "${HTTP_CODE}" != "409" ]; then
+            echo "ERROR: Failed to create namespace (HTTP ${HTTP_CODE})"
+            exit 1
+          fi
+
+      - name: Upload Arcadia swagger to F5 XC object store
+        if: ${{ vars.XC_UPLOAD_ARCADIA_API_SPEC == 'true' }}
+        run: |
+          SWAGGER_NAME="arcadia-oas3"
+          API_URL="${{ secrets.XC_API_URL }}"
+          NAMESPACE="${{ vars.XC_NAMESPACE }}"
+
+          openssl pkcs12 -legacy -in api.p12 -clcerts -nokeys \
+            -passin pass:"${{ secrets.XC_P12_PASSWORD }}" -out /tmp/cert.pem 2>/dev/null || \
+          openssl pkcs12 -in api.p12 -clcerts -nokeys \
+            -passin pass:"${{ secrets.XC_P12_PASSWORD }}" -out /tmp/cert.pem
+          openssl pkcs12 -legacy -in api.p12 -nocerts -nodes \
+            -passin pass:"${{ secrets.XC_P12_PASSWORD }}" -out /tmp/key.pem 2>/dev/null || \
+          openssl pkcs12 -in api.p12 -nocerts -nodes \
+            -passin pass:"${{ secrets.XC_P12_PASSWORD }}" -out /tmp/key.pem
+
+          curl -sf "https://raw.githubusercontent.com/Access-Quality/f5-xc-terraform-examples/main/arcadia/arcadia-oas3-2.0.1.json" \
+            -o /tmp/swagger.json
+
+          python3 -c "import json; f=open('/tmp/swagger.json'); d=json.load(f); f.close(); clean=lambda o: {k:clean(v) for k,v in o.items() if k!=''} if isinstance(o,dict) else [clean(i) for i in o] if isinstance(o,list) else o; open('/tmp/swagger.json','w').write(json.dumps(clean(d)))"
+
+          BODY=$(python3 -c "import json,sys; f=open('/tmp/swagger.json'); c=f.read(); f.close(); b={'name':sys.argv[1],'namespace':sys.argv[2],'object_type':'swagger','string_value':c,'content_format':'json','no_attributes':{}}; print(json.dumps(b))" "${SWAGGER_NAME}" "${NAMESPACE}")
+
+          RESP=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X PUT \
+            --cert /tmp/cert.pem --key /tmp/key.pem \
+            -H "Content-Type: application/json" \
+            -d "${BODY}" \
+            "${API_URL}/object_store/namespaces/${NAMESPACE}/stored_objects/swagger/${SWAGGER_NAME}")
+          HTTP_STATUS=$(echo "${RESP}" | grep -o "HTTP_STATUS:[0-9]*" | cut -d: -f2)
+          RESP_BODY=$(echo "${RESP}" | sed '/HTTP_STATUS:/d')
+          if [ "${HTTP_STATUS}" != "200" ]; then
+            echo "ERROR: Swagger upload failed with HTTP ${HTTP_STATUS}"
+            echo "${RESP_BODY}"
+            exit 1
+          fi
+
+          SPEC_URL=$(echo "${RESP_BODY}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['metadata']['url'])")
+          echo "ARCADIA_API_SPEC_URL=${SPEC_URL}" >> "$GITHUB_ENV"
+          rm -f /tmp/cert.pem /tmp/key.pem /tmp/swagger.json
+
+      - name: Upload crAPI swagger to F5 XC object store
+        if: ${{ vars.XC_UPLOAD_CRAPI_API_SPEC == 'true' }}
+        run: |
+          SWAGGER_NAME="crapi-openapi"
+          API_URL="${{ secrets.XC_API_URL }}"
+          NAMESPACE="${{ vars.XC_NAMESPACE }}"
+
+          openssl pkcs12 -legacy -in api.p12 -clcerts -nokeys \
+            -passin pass:"${{ secrets.XC_P12_PASSWORD }}" -out /tmp/cert.pem 2>/dev/null || \
+          openssl pkcs12 -in api.p12 -clcerts -nokeys \
+            -passin pass:"${{ secrets.XC_P12_PASSWORD }}" -out /tmp/cert.pem
+          openssl pkcs12 -legacy -in api.p12 -nocerts -nodes \
+            -passin pass:"${{ secrets.XC_P12_PASSWORD }}" -out /tmp/key.pem 2>/dev/null || \
+          openssl pkcs12 -in api.p12 -nocerts -nodes \
+            -passin pass:"${{ secrets.XC_P12_PASSWORD }}" -out /tmp/key.pem
+
+          curl -sf "https://raw.githubusercontent.com/OWASP/crAPI/develop/openapi-spec/crapi-openapi-spec.json" \
+            -o /tmp/crapi-swagger.json
+
+          python3 -c "import json; f=open('/tmp/crapi-swagger.json'); d=json.load(f); f.close(); clean=lambda o: {k:clean(v) for k,v in o.items() if k!=''} if isinstance(o,dict) else [clean(i) for i in o] if isinstance(o,list) else o; open('/tmp/crapi-swagger.json','w').write(json.dumps(clean(d)))"
+
+          BODY=$(python3 -c "import json,sys; f=open('/tmp/crapi-swagger.json'); c=f.read(); f.close(); b={'name':sys.argv[1],'namespace':sys.argv[2],'object_type':'swagger','string_value':c,'content_format':'json','no_attributes':{}}; print(json.dumps(b))" "${SWAGGER_NAME}" "${NAMESPACE}")
+
+          RESP=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X PUT \
+            --cert /tmp/cert.pem --key /tmp/key.pem \
+            -H "Content-Type: application/json" \
+            -d "${BODY}" \
+            "${API_URL}/object_store/namespaces/${NAMESPACE}/stored_objects/swagger/${SWAGGER_NAME}")
+          HTTP_STATUS=$(echo "${RESP}" | grep -o "HTTP_STATUS:[0-9]*" | cut -d: -f2)
+          RESP_BODY=$(echo "${RESP}" | sed '/HTTP_STATUS:/d')
+          if [ "${HTTP_STATUS}" != "200" ]; then
+            echo "ERROR: crAPI swagger upload failed with HTTP ${HTTP_STATUS}"
+            echo "${RESP_BODY}"
+            exit 1
+          fi
+
+          SPEC_URL=$(echo "${RESP_BODY}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['metadata']['url'])")
+          echo "CRAPI_API_SPEC_URL=${SPEC_URL}" >> "$GITHUB_ENV"
+          rm -f /tmp/cert.pem /tmp/key.pem /tmp/crapi-swagger.json
+
+      - name: Build API spec list for Terraform
+        run: |
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import json, os, sys
+          specs = []
+          for key in ("ARCADIA_API_SPEC_URL", "CRAPI_API_SPEC_URL"):
+              value = os.environ.get(key, "").strip()
+              if value:
+                  specs.append(value)
+          if os.environ.get("TF_VAR_xc_api_protection", "false").lower() == "true" and not specs:
+              print("ERROR: XC_API_PROTECTION=true pero no se cargo ninguna especificacion API", file=sys.stderr)
+              raise SystemExit(1)
+          print("TF_VAR_xc_api_specs=" + json.dumps(specs))
+          PY
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Validate
+        run: terraform validate -no-color
+
+      - name: Remove namespace from TF state if present
+        run: terraform state rm volterra_namespace.this 2>/dev/null || true
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve -input=false
+
+      - name: Verify public endpoints
+        run: |
+          wait_for_public_status() {
+            local name="$1"
+            local url="$2"
+            local expected_regex="$3"
+
+            for attempt in $(seq 1 30); do
+              code=$(curl -s -o /tmp/public.out -w "%{http_code}" --max-time 15 "$url" || true)
+              echo "${name}: intento ${attempt}, HTTP ${code}"
+              if printf '%s' "$code" | grep -Eq "$expected_regex"; then
+                echo "${name} publico listo con HTTP ${code}"
+                return 0
+              fi
+              sleep 10
+            done
+
+            echo "ERROR: ${name} publico no quedo listo a tiempo"
+            echo "Ultima respuesta:"
+            cat /tmp/public.out || true
+            return 1
+          }
+
+          wait_for_public_status "Arcadia" "http://${{ vars.ARCADIA_DOMAIN }}/" "^200$"
+          wait_for_public_status "Arcadia files" "http://${{ vars.ARCADIA_DOMAIN }}/files/" "^(200|301|302)$"
+          wait_for_public_status "Arcadia api" "http://${{ vars.ARCADIA_DOMAIN }}/api/" "^(200|301|302)$"
+          wait_for_public_status "Arcadia app3" "http://${{ vars.ARCADIA_DOMAIN }}/app3/" "^(200|301|302)$"
+          wait_for_public_status "DVWA" "http://${{ vars.DVWA_DOMAIN }}/" "^(200|301|302)$"
+          wait_for_public_status "Boutique" "http://${{ vars.BOUTIQUE_DOMAIN }}/" "^200$"
+          wait_for_public_status "crAPI" "http://${{ vars.CRAPI_DOMAIN }}/" "^200$"
+          wait_for_public_status "Mailhog" "http://${{ vars['MAILHOG_DOMAIN'] }}/" "^200$"
