@@ -580,6 +580,10 @@ Casos sugeridos:
 - rate limiting
 - tests de WAF sobre parametros y requests anormalmente grandes
 
+Guia detallada:
+
+- [Pruebas de seguridad para Online Boutique](README-pruebas-boutique.md)
+
 ### crAPI
 
 Casos sugeridos:
