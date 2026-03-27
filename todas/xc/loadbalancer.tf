@@ -29,9 +29,9 @@ resource "volterra_http_loadbalancer" "lb_https" {
   depends_on  = [volterra_origin_pool.op, volterra_app_firewall.waap-tf, volterra_api_definition.arcadia]
   name        = format("%s-xclb-%s", local.project_prefix, local.build_suffix)
   namespace   = var.xc_namespace
-  description = format("HTTP LB with WAF for Arcadia Finance and DVWA on AWS RE")
+  description = format("HTTP LB with WAF for Arcadia Finance, DVWA and Online Boutique on AWS RE")
 
-  domains                         = [var.arcadia_domain, var.dvwa_domain]
+  domains                         = [var.arcadia_domain, var.dvwa_domain, var.boutique_domain]
   advertise_on_public_default_vip = true
 
   default_route_pools {

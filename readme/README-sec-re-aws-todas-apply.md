@@ -1,11 +1,12 @@
-# Seguridad en RE para Arcadia + DVWA en AWS - Deploy
+# Seguridad en RE para Arcadia + DVWA + Boutique en AWS - Deploy
 
-Este workflow despliega una solucion de **WAF sobre el Regional Edge (RE) de F5 Distributed Cloud** para **dos aplicaciones distintas en la misma instancia EC2** de AWS:
+Este workflow despliega una solucion de **WAF sobre el Regional Edge (RE) de F5 Distributed Cloud** para **tres aplicaciones distintas en la misma instancia EC2** de AWS:
 
 - **Arcadia Finance**, accesible por `ARCADIA_DOMAIN`
 - **DVWA**, accesible por `DVWA_DOMAIN`
+- **Online Boutique**, accesible por `BOUTIQUE_DOMAIN`
 
-Ambas aplicaciones corren en una sola VM Amazon Linux 2. Dentro de la instancia se levanta un **nginx compartido** que enruta por `Host` hacia los contenedores correctos. En F5 XC se publica **un solo HTTP Load Balancer** que anuncia ambos FQDN y apunta al mismo origin pool.
+Las tres aplicaciones corren en una sola VM Amazon Linux 2. Dentro de la instancia se levanta un **nginx compartido** que enruta por `Host` hacia los contenedores correctos. En F5 XC se publica **un solo HTTP Load Balancer** que anuncia los tres FQDN y apunta al mismo origin pool.
 
 ---
 
@@ -15,11 +16,12 @@ Ambas aplicaciones corren en una sola VM Amazon Linux 2. Dentro de la instancia 
 
 | Capacidad | Descripcion |
 | --- | --- |
-| Dos apps en una sola VM | Arcadia y DVWA comparten la misma EC2 sin necesidad de Kubernetes ni EKS |
-| Publicacion por FQDN | Cada aplicacion se publica con su propio dominio: `ARCADIA_DOMAIN` y `DVWA_DOMAIN` |
+| Tres apps en una sola VM | Arcadia, DVWA y Online Boutique comparten la misma EC2 sin necesidad de Kubernetes ni EKS |
+| Publicacion por FQDN | Cada aplicacion se publica con su propio dominio: `ARCADIA_DOMAIN`, `DVWA_DOMAIN` y `BOUTIQUE_DOMAIN` |
 | WAF en Regional Edge | El trafico entra por el RE global de F5 XC antes de llegar a AWS |
 | API Security para Arcadia | Arcadia mantiene API Discovery y API Protection con su swagger OpenAPI |
 | WAF para DVWA | DVWA queda expuesta con WAF en el RE para pruebas de seguridad web |
+| WAF para Online Boutique | Online Boutique queda expuesta con WAF en el RE para pruebas de frontend HTTP |
 | Infraestructura efimera | Todo se crea con Terraform y se destruye con un workflow dedicado |
 
 ### Arquitectura conceptual
@@ -35,6 +37,7 @@ Internet
 |  HTTP Load Balancer unico                                 |
 |    - ARCADIA_DOMAIN                                       |
 |    - DVWA_DOMAIN                                          |
+|    - BOUTIQUE_DOMAIN                                      |
 |                                                           |
 |  Un solo LB apunta al mismo Origin Pool                   |
 +-----------------------------------------------------------+
@@ -48,6 +51,7 @@ Internet
 |    - nginx reverse proxy por Host                          |
 |    - Arcadia Finance containers                            |
 |    - DVWA container                                        |
+|    - Online Boutique containers                            |
 +-----------------------------------------------------------+
 ```
 
@@ -59,7 +63,7 @@ Internet
 todas/infra  -> VPC + Subnet publica + Internet Gateway + Security Group
       |
       v
-todas/vm     -> EC2 + Elastic IP + Arcadia + DVWA + nginx reverse proxy
+todas/vm     -> EC2 + Elastic IP + Arcadia + DVWA + Boutique + nginx reverse proxy
       |
       v
 todas/xc     -> XC Namespace + Origin Pool + HTTP LB unico + WAF
@@ -70,11 +74,12 @@ todas/xc     -> XC Namespace + Origin Pool + HTTP LB unico + WAF
 ## Objetivo del workflow
 
 1. Aprovisionar la red base en AWS.
-2. Desplegar una sola EC2 con Arcadia y DVWA en contenedores separados.
+2. Desplegar una sola EC2 con Arcadia, DVWA y Online Boutique en contenedores separados.
 3. Configurar un nginx local que enrute por `Host`:
    - `ARCADIA_DOMAIN` -> Arcadia
    - `DVWA_DOMAIN` -> DVWA
-4. Crear en F5 XC un solo HTTP Load Balancer para publicar ambos dominios en el RE.
+  - `BOUTIQUE_DOMAIN` -> Online Boutique
+4. Crear en F5 XC un solo HTTP Load Balancer para publicar los tres dominios en el RE.
 
 ---
 
@@ -109,6 +114,7 @@ todas/xc     -> XC Namespace + Origin Pool + HTTP LB unico + WAF
 | `XC_NAMESPACE` | `democasos` | Namespace de F5 XC |
 | `ARCADIA_DOMAIN` | `arcadia.example.com` | FQDN publico de Arcadia |
 | `DVWA_DOMAIN` | `dvwa.example.com` | FQDN publico de DVWA |
+| `BOUTIQUE_DOMAIN` | `boutique.example.com` | FQDN publico de Online Boutique |
 | `XC_WAF_BLOCKING` | `true` | Activa WAF en bloqueo o monitoreo |
 | `XC_BOT_DEFENSE` | `false` | Activa Bot Defense en Arcadia |
 
@@ -134,14 +140,14 @@ todas/xc     -> XC Namespace + Origin Pool + HTTP LB unico + WAF
 - Directorio: `todas/vm`
 - Crea una EC2 con Elastic IP.
 - Instala Docker.
-- Levanta Arcadia y DVWA en la misma red Docker.
-- Publica ambos servicios a traves de un nginx local en el puerto `8080`.
+- Levanta Arcadia, DVWA y Online Boutique en la misma red Docker.
+- Publica los tres servicios a traves de un nginx local en el puerto `8080`.
 
 ### `terraform_xc`
 
 - Directorio: `todas/xc`
 - Crea un origin pool comun hacia la misma VM.
-- Publica **Arcadia** y **DVWA** en un solo HTTP Load Balancer con ambos dominios.
+- Publica **Arcadia**, **DVWA** y **Online Boutique** en un solo HTTP Load Balancer con los tres dominios.
 - Mantiene API Discovery y API Protection para Arcadia.
 
 ---
@@ -152,6 +158,7 @@ El archivo `todas/vm/userdata.sh` genera un `default.conf` para nginx con routin
 
 - `server_name ARCADIA_DOMAIN` -> Arcadia
 - `server_name DVWA_DOMAIN` -> DVWA
+- `server_name BOUTIQUE_DOMAIN` -> Online Boutique
 
 Esto evita problemas de path-based routing como `/arcadia` o `/dvwa`, y deja cada aplicacion en su raiz natural.
 
@@ -168,6 +175,11 @@ Esto evita problemas de path-based routing como `/arcadia` o `/dvwa`, y deja cad
 
 - URL esperada: `http://DVWA_DOMAIN/setup.php`
 - Permite pruebas de WAF y modulos vulnerables clasicos.
+
+### Online Boutique
+
+- URL esperada: `http://BOUTIQUE_DOMAIN/`
+- Permite pruebas de WAF sobre el frontend HTTP de ecommerce.
 
 ---
 

@@ -16,7 +16,7 @@ variable "ssh_key" {
 variable "instance_type" {
   type        = string
   description = "EC2 instance type"
-  default     = "t3.small"
+  default     = "t3.large"
 }
 
 variable "arcadia_domain" {
@@ -27,4 +27,9 @@ variable "arcadia_domain" {
 variable "dvwa_domain" {
   type        = string
   description = "FQDN used to access DVWA through the reverse proxy"
+}
+
+variable "boutique_domain" {
+  type        = string
+  description = "FQDN used to access Online Boutique through the reverse proxy"
 }

@@ -14,7 +14,9 @@ resource "aws_instance" "arcadia" {
   user_data_base64 = base64encode(templatefile("${path.module}/userdata.sh", {
     arcadia_domain = var.arcadia_domain
     dvwa_domain    = var.dvwa_domain
+    boutique_domain = var.boutique_domain
   }))
+  user_data_replace_on_change = true
 
   root_block_device {
     volume_size = 20

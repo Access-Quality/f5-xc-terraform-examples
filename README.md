@@ -66,9 +66,9 @@ Despliega una **aplicación distribuida multi-cloud** donde los microservicios d
 
 ---
 
-### 8. Seguridad en RE para Arcadia + DVWA en AWS — `sec-re-aws-todas-apply.yml`
+### 8. Seguridad en RE para Arcadia + DVWA + Boutique en AWS — `sec-re-aws-todas-apply.yml`
 
-Despliega una solucion de **WAF sobre el Regional Edge (RE) de F5 Distributed Cloud** para **dos aplicaciones distintas en la misma instancia EC2** de AWS: **Arcadia Finance** y **DVWA**. Cada aplicacion se publica con su propio FQDN, `ARCADIA_DOMAIN` y `DVWA_DOMAIN`, y ambas comparten la misma VM mediante un **nginx reverse proxy** interno que enruta por `Host`. En F5 XC se crea **un solo HTTP Load Balancer** que anuncia ambos dominios y apunta al mismo origin pool. Arcadia conserva **API Discovery**, **API Protection** y soporte opcional de **Bot Defense**; DVWA queda publicada con **WAF** para pruebas web clasicas.
+Despliega una solucion de **WAF sobre el Regional Edge (RE) de F5 Distributed Cloud** para **tres aplicaciones distintas en la misma instancia EC2** de AWS: **Arcadia Finance**, **DVWA** y **Online Boutique**. Cada aplicacion se publica con su propio FQDN, `ARCADIA_DOMAIN`, `DVWA_DOMAIN` y `BOUTIQUE_DOMAIN`, y todas comparten la misma VM mediante un **nginx reverse proxy** interno que enruta por `Host`. En F5 XC se crea **un solo HTTP Load Balancer** que anuncia los tres dominios y apunta al mismo origin pool. Arcadia conserva **API Discovery**, **API Protection** y soporte opcional de **Bot Defense**; DVWA y Online Boutique quedan publicadas con **WAF** para pruebas web clasicas.
 
 👉 [Ver guía completa](readme/README-sec-re-aws-todas-apply.md)
 
@@ -87,7 +87,7 @@ La siguiente tabla resume la topología de cada caso: dónde se inspecciona el t
 | 5 | `f5xc-api-ce-eks-apply.yml` | API WAF en RE para CE dentro de EKS | crAPI | WAF · API | **RE + CE** | ✅ | ✅ CE dentro del clúster EKS | ✅ | ✅ | Clúster EKS | AWS |
 | 6 | `teachable-01-mc-networkconnect-apply.yml` | Teachable 01-mcn-networkconnect | — (MCN) | — | **CE** (MCN este-oeste) | ✅ Global VN | ✅ AWS + Azure | ❌ | ✅ | VMs en AWS y Azure | AWS + Azure |
 | 7 | `bookinfo-smcn-apply.yaml` | Secure Multi-Cloud Networking | Bookinfo | WAF | **RE + CE** | ✅ | ✅ EKS + AKS | ✅ | ✅ | Clústeres EKS + AKS | AWS + Azure |
-| 8 | `sec-re-aws-todas-apply.yml` | Seguridad en RE para Arcadia + DVWA en AWS | Arcadia Finance + DVWA | WAF · API · BD | **RE** (Regional Edge) | ✅ | ❌ | ❌ | ❌ | VM (EC2) compartida | AWS |
+| 8 | `sec-re-aws-todas-apply.yml` | Seguridad en RE para Arcadia + DVWA + Boutique en AWS | Arcadia Finance + DVWA + Online Boutique | WAF · API · BD | **RE** (Regional Edge) | ✅ | ❌ | ❌ | ❌ | VM (EC2) compartida | AWS |
 
 > **Pruebas de seguridad:** WAF = Web Application Firewall (SQLi, XSS, RCE…) · API = API Discovery + API Protection · BD = Bot Defense
 
@@ -103,7 +103,7 @@ La siguiente tabla resume la topología de cada caso: dónde se inspecciona el t
 
 Cada caso de uso incluye una aplicación diferente. La siguiente tabla resume qué tipo de pruebas encajan mejor con cada una:
 
-| Tipo de prueba                             | Arcadia Finance (caso 1) | DVWA (caso 4) | Online Boutique (casos 2 y 3) | crAPI (caso 5) | Arcadia + DVWA (caso 8) |
+| Tipo de prueba                             | Arcadia Finance (caso 1) | DVWA (caso 4) | Online Boutique (casos 2 y 3) | crAPI (caso 5) | Arcadia + DVWA + Boutique (caso 8) |
 | ------------------------------------------ | :----------------------: | :-----------: | :---------------------------: | :------------: | :---------------------: |
 | WAF — SQLi, XSS, Command Injection         | ✅                        | ✅ Ideal       | ⚠️ Limitado                   | ⚠️ Parcial     | ✅ Ideal                |
 | WAF — File upload / RCE                    | ❌                        | ✅ Ideal       | ❌                             | ❌              | ✅ Válido               |
@@ -139,7 +139,7 @@ Cada caso de uso incluye una aplicación diferente. La siguiente tabla resume qu
 ## Historial de Cambios
 
 ### 2026-03-27
-- **Seguridad en RE para Arcadia + DVWA en AWS** (`sec-re-aws-todas-apply.yml` / `sec-re-aws-todas-destroy.yml`): nuevo caso agregado para publicar **Arcadia Finance** y **DVWA** en la misma VM EC2 de AWS, usando dos FQDN (`ARCADIA_DOMAIN` y `DVWA_DOMAIN`), un proxy nginx interno con enrutamiento por `Host` y **un solo HTTP Load Balancer** de F5 XC para ambos dominios. Se añadió la guía [README](readme/README-sec-re-aws-todas-apply.md) y el arbol Terraform autocontenido en `todas/`.
+- **Seguridad en RE para Arcadia + DVWA + Boutique en AWS** (`sec-re-aws-todas-apply.yml` / `sec-re-aws-todas-destroy.yml`): nuevo caso agregado para publicar **Arcadia Finance**, **DVWA** y **Online Boutique** en la misma VM EC2 de AWS, usando tres FQDN (`ARCADIA_DOMAIN`, `DVWA_DOMAIN` y `BOUTIQUE_DOMAIN`), un proxy nginx interno con enrutamiento por `Host` y **un solo HTTP Load Balancer** de F5 XC para los tres dominios. Se añadió la guía [README](readme/README-sec-re-aws-todas-apply.md) y el arbol Terraform autocontenido en `todas/`.
 
 ### 2026-03-26
 - **API + WAF + Bot Defense en RE AWS** (`waf-re-aws-apply.yml` / `waf-re-aws-destroy.yml`): workflows renombrados a `API + WAF + BD` para reflejar que incluyen **WAF**, **API Discovery**, **API Protection** y **Bot Defense** (opcional vía variable `XC_BOT_DEFENSE`). Se agregó `VOLT_API_P12_FILE` al job `terraform_xc` de ambos workflows para correcta autenticación del provider de F5 XC.
