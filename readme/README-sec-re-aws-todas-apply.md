@@ -585,6 +585,10 @@ Casos sugeridos:
 - pruebas de BOLA / IDOR
 - llamadas con token invalido o parametros no esperados
 
+Guia detallada:
+
+- [Pruebas de seguridad para crAPI](README-pruebas-crapi.md)
+
 ### Mailhog
 
 Casos sugeridos:
