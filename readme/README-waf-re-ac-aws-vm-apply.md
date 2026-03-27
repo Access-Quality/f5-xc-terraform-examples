@@ -342,6 +342,22 @@ Después de hacer login, ir a **DVWA Security** en el menú lateral y selecciona
 
 > Para este laboratorio se recomienda usar **`Low`** para que el WAF de F5 XC actúe como única línea de defensa.
 
+
+### Consideraciones específicas para Brute Force en DVWA
+
+> **Importante:** El módulo de Brute Force de DVWA **usa método GET** con parámetros en la URL (no POST a /dvwa/login.php). Por lo tanto, la configuración de mitigación debe ser distinta a la de otros módulos de login.
+
+- **Path:** `/vulnerabilities/brute/` (método GET, no POST)
+- **Mitigación recomendada:**
+  - **Rate Limiting**: Limitar a 5-10 requests/minuto por IP en este endpoint. Esto frena ataques automatizados que prueban muchas combinaciones rápidamente.
+  - **Opcional:** Crear una Service Policy que bloquee si el query string contiene el patrón `username=&password=&Login=Login` con alta frecuencia.
+- **No usar solo Bot Defense (JS Challenge):** JS Challenge no es efectivo aquí porque el ataque es un GET directo con parámetros en query string; un bot puede hacer GET sin ejecutar JS en la respuesta previa. El challenge no se interpone entre el atacante y la respuesta.
+- **Bot Defense (JS Challenge) es más efectivo en flujos donde el servidor devuelve HTML/JS que el cliente debe procesar antes de reenviar** (por ejemplo, formularios de login clásicos como `/dvwa/login.php`). En `/vulnerabilities/brute/`, la respuesta es inmediata y el challenge no protege el flujo.
+
+**Resumen:** Para `/vulnerabilities/brute/` de DVWA, prioriza Rate Limiting sobre Bot Defense.
+
+---
+
 ### Módulos disponibles
 
 | Módulo                   | Tipo de ataque                       | Cómo probar con el WAF                                           |
