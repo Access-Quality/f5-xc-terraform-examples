@@ -564,6 +564,10 @@ Casos sugeridos:
 
 Nota importante: para el modulo brute force de DVWA, una mitigacion de tipo **rate limiting** suele ser mas adecuada que una politica de **JS Challenge**.
 
+Guia detallada:
+
+- [Pruebas de seguridad para DVWA](README-pruebas-dvwa.md)
+
 ### Online Boutique
 
 Casos sugeridos:
