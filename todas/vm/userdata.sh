@@ -9,33 +9,10 @@ sudo usermod -a -G docker ec2-user
 
 # Create nginx reverse proxy config for both applications
 sudo tee /home/ec2-user/default.conf > /dev/null <<'NGINXCONF'
-upstream mainapp {
-    server mainapp;
-}
-
-upstream backend {
-    server backend;
-}
-
-upstream app2 {
-    server app2;
-}
-
-upstream app3 {
-    server app3;
-}
-
-upstream dvwa {
-    server dvwa;
-}
-
-upstream boutique {
-    server frontend:8080;
-}
-
 server {
     listen 80 default_server;
     server_name _;
+    resolver 127.0.0.11 ipv6=off valid=10s;
 
     location = /healthz {
         access_log off;
@@ -48,6 +25,7 @@ server {
 server {
     listen 80;
     server_name ${arcadia_domain};
+    resolver 127.0.0.11 ipv6=off valid=10s;
 
     location = /healthz {
         access_log off;
@@ -55,37 +33,42 @@ server {
     }
 
     location / {
+        set $mainapp_upstream http://mainapp;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_pass http://mainapp/;
+        proxy_pass $mainapp_upstream;
     }
 
     location /files {
+        set $backend_upstream http://backend/files/;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_pass http://backend/files/;
+        proxy_pass $backend_upstream;
     }
 
     location /api {
+        set $app2_upstream http://app2/api/;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_pass http://app2/api/;
+        proxy_pass $app2_upstream;
     }
 
     location /app3 {
+        set $app3_upstream http://app3/app3/;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_pass http://app3/app3/;
+        proxy_pass $app3_upstream;
     }
 }
 
 server {
     listen 80;
     server_name ${dvwa_domain};
+    resolver 127.0.0.11 ipv6=off valid=10s;
 
     location = /healthz {
         access_log off;
@@ -93,16 +76,18 @@ server {
     }
 
     location / {
+        set $dvwa_upstream http://dvwa;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_pass http://dvwa/;
+        proxy_pass $dvwa_upstream;
     }
 }
 
 server {
     listen 80;
     server_name ${boutique_domain};
+    resolver 127.0.0.11 ipv6=off valid=10s;
 
     location = /healthz {
         access_log off;
@@ -110,10 +95,11 @@ server {
     }
 
     location / {
+        set $boutique_upstream http://frontend:8080;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_pass http://boutique/;
+        proxy_pass $boutique_upstream;
     }
 }
 
