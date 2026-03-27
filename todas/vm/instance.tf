@@ -12,14 +12,15 @@ resource "aws_instance" "arcadia" {
   key_name               = aws_key_pair.arcadia.key_name
 
   user_data_base64 = base64encode(templatefile("${path.module}/userdata.sh", {
-    arcadia_domain = var.arcadia_domain
-    dvwa_domain    = var.dvwa_domain
+    arcadia_domain  = var.arcadia_domain
+    dvwa_domain     = var.dvwa_domain
     boutique_domain = var.boutique_domain
+    crapi_domain    = var.crapi_domain
   }))
   user_data_replace_on_change = true
 
   root_block_device {
-    volume_size = 20
+    volume_size = 40
   }
 
   tags = {

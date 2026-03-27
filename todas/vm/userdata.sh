@@ -33,6 +33,10 @@ upstream boutique {
     server frontend:8080;
 }
 
+upstream crapi {
+    server crapi-web:80;
+}
+
 server {
     listen 80 default_server;
     server_name _;
@@ -116,10 +120,50 @@ server {
         proxy_pass http://boutique/;
     }
 }
+
+server {
+    listen 80;
+    server_name ${crapi_domain};
+
+    location = /healthz {
+        access_log off;
+        return 200;
+    }
+
+    location / {
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://crapi/;
+    }
+}
 NGINXCONF
+
+sudo tee /home/ec2-user/crapi-jwks.json > /dev/null <<'JWKS'
+{
+    "keys": [
+        {
+            "p": "-o_gG3DQK9540fR_-WM9dy1YgTR-WSH8FezYnH6I5jwwPB6ocni8XgkWCAiKOPYjK6nhmoTD7DBEetilFIWVj1P0G5fejp_c3H-uQQdd6JW2NBWHfWpADglIEc4NfUgjQ8cXjT1-oIJpXzpX6KOhWEP0yGNBYns7W8CNxbw58vU",
+            "kty": "RSA",
+            "q": "tW1D1JK53TIiip9uBVl6EGzXWPFwy8QXlZHbfg3TfhURUF5OYey9Ig-qxh74KvQ-uzwMZOYux0EdUe0OmV-p27huY-nusHjpxKL6xUxpqsLWrYTa6ygRHep3_A50ksN_XIn83oAjBlG4TEePzBsMQb6F4HDrEhpdPeYepKa5PNc",
+            "d": "XJu0Vh3Uq5gV5UPMCfm_j6D5INgX7VjLSN8mup4LfUBkJAk9vpQmDYF8gVzpMr3YdBk_Y7MI1BapPVg2i-s2UQR4xJYwpDOfKJactGWzruvfiTOKNIc8Q87WhLl2D4_FGI2jfyYk6itCLOOk1zfZdkjLLNiQg1SDOqC28AT-qKh99wLRKiIuewbJVW5C-0D8YjlquBU6rXdKxONYKnA1NHWfJEbPtsyJIlfUs06wjiMcXrLLc6qy98LL8t0oQcGdUTN4rICGGj-uH3k7-evJyKXC_RECmbcMu2q8GkjZ7lvaVtHh3TGGAA5TTc-7kW3MUjpCLLL06erLxCn3CcGr6Q",
+            "e": "AQAB",
+            "use": "sig",
+            "kid": "MKMZkDenUfuDF2byYowDj7tW5Ox6XG4Y1THTEGScRg8",
+            "qi": "IChXZG2VaA05LVfN-nIX03sAZo7ayetTiFKrhGpdmsODw9AoCbBIx4T4SuPnQQBYVkaCAcseyB1XAjqA4Ebm2yvE6yYo-Q8nP-wEo5Mzm18UimCffMox-uSrig1uhuK9oziV-Y11Ytps8yEQq--9BzVTCs1sXAkLVSaO58kGsm4",
+            "dp": "rl98fnxXU4BjIvJ-MWfAOfVj159ZotxE3FlVMivZSClxBBXt8qRVqze1jmerEhMxzMxQRkHJO9EnhzrIP-zrdbDefGmHqEhW41k0QutGjnvKLpshDMXpyBrrfgChYKPYbu3aVSALxNadUHmA_lUKDyxT6TUyJsBOQf9Sat8gkRU",
+            "alg": "RS256",
+            "dq": "d8mf-o-yJmj-w3ZGh0Ovw36JpREs_20GgVvfh1gLpvi0CNNrf1529jFP-SXjh0Di1m7sZAZTJn5IpJoXhI7UMN2SDWgcj-oVtx5A4tnz_qpMYh8RCCjZPF5eQE8vCuQHiIsXKbWC6p40SDELsaC-M_5emHUV0EsV-1OgMehe79s",
+            "n": "sZKrGYja9S7BkO-waOcupoGY6BQjixJkg1Uitt278NbiCSnBRw5_cmfuWFFFPgRxabBZBJwJAujnQrlgTLXnRRItM9SRO884cEXn-s4Uc8qwk6pev63qb8no6aCVY0dFpthEGtOP-3KIJ2kx2i5HNzm8d7fG3ZswZrttDVbSSTy8UjPTOr4xVw1Yyh_GzGK9i_RYBWHftDsVfKrHcgGn1F_T6W0cgcnh4KFmbyOQ7dUy8Uc6Gu8JHeHJVt2vGcn50EDtUy2YN-UnZPjCSC7vYOfd5teUR_Bf4jg8GN6UnLbr_Et8HUnz9RFBLkPIf0NiY6iRjp9ooSDkml2OGql3ww"
+        }
+    ]
+}
+JWKS
 
 # Deploy application containers
 docker network inspect internal >/dev/null 2>&1 || docker network create internal
+docker volume inspect crapi-postgres-data >/dev/null 2>&1 || docker volume create crapi-postgres-data
+docker volume inspect crapi-mongodb-data >/dev/null 2>&1 || docker volume create crapi-mongodb-data
 docker run -dit --restart unless-stopped -h mainapp --name mainapp --net internal registry.gitlab.com/arcadia-application/main-app/mainapp:latest
 docker run -dit --restart unless-stopped -h backend --name backend --net internal registry.gitlab.com/arcadia-application/back-end/backend:latest
 docker run -dit --restart unless-stopped -h app2 --name app2 --net internal registry.gitlab.com/arcadia-application/app2/app2:latest
@@ -154,6 +198,90 @@ docker run -dit --restart unless-stopped -h frontend --name frontend --net inter
     -e AD_SERVICE_ADDR=adservice:9555 \
     -e ENABLE_PROFILER=0 \
     gcr.io/google-samples/microservices-demo/frontend:v0.8.0
+docker run -dit --restart unless-stopped -h postgresdb --name postgresdb --net internal \
+    -e POSTGRES_USER=admin \
+    -e POSTGRES_PASSWORD=crapisecretpassword \
+    -e POSTGRES_DB=crapi \
+    -v crapi-postgres-data:/var/lib/postgresql/data \
+    postgres:14
+docker run -dit --restart unless-stopped -h mongodb --name mongodb --net internal \
+    -e MONGO_INITDB_ROOT_USERNAME=admin \
+    -e MONGO_INITDB_ROOT_PASSWORD=crapisecretpassword \
+    -v crapi-mongodb-data:/data/db \
+    mongo:5.0
+docker run -dit --restart unless-stopped -h mailhog --name mailhog --net internal \
+    -e MH_MONGO_URI=admin:crapisecretpassword@mongodb:27017 \
+    -e MH_STORAGE=mongodb \
+    crapi/mailhog:latest
+
+sleep 20
+
+docker run -dit --restart unless-stopped -h crapi-identity --name crapi-identity --net internal \
+    -e DB_HOST=postgresdb \
+    -e DB_DRIVER=postgresql \
+    -e JWT_SECRET=crapi \
+    -e DB_USER=admin \
+    -e DB_PASSWORD=crapisecretpassword \
+    -e DB_NAME=crapi \
+    -e DB_PORT=5432 \
+    -e APP_NAME=crapi-identity \
+    -e ENABLE_SHELL_INJECTION=false \
+    -e ENABLE_LOG4J=true \
+    -e MAILHOG_HOST=mailhog \
+    -e MAILHOG_PORT=1025 \
+    -e MAILHOG_DOMAIN=example.com \
+    -e SMTP_HOST=smtp.example.com \
+    -e SMTP_PORT=587 \
+    -e SMTP_EMAIL=user@example.com \
+    -e SMTP_PASS=xxxxxxxxxxxxxx \
+    -e SMTP_FROM=no-reply@example.com \
+    -e SMTP_AUTH=true \
+    -e JWT_EXPIRATION=604800000 \
+    -e SMTP_STARTTLS=true \
+    -e SERVER_PORT=8080 \
+    -v /home/ec2-user/crapi-jwks.json:/.keys/jwks.json:ro \
+    crapi/crapi-identity:develop
+
+sleep 10
+
+docker run -dit --restart unless-stopped -h crapi-community --name crapi-community --net internal \
+    -e IDENTITY_SERVICE=crapi-identity:8080 \
+    -e DB_HOST=postgresdb \
+    -e DB_DRIVER=postgres \
+    -e DB_USER=admin \
+    -e DB_PASSWORD=crapisecretpassword \
+    -e DB_NAME=crapi \
+    -e DB_PORT=5432 \
+    -e MONGO_DB_HOST=mongodb \
+    -e MONGO_DB_DRIVER=mongodb \
+    -e MONGO_DB_USER=admin \
+    -e MONGO_DB_PASSWORD=crapisecretpassword \
+    -e MONGO_DB_NAME=crapi \
+    -e MONGO_DB_PORT=27017 \
+    -e SERVER_PORT=8087 \
+    crapi/crapi-community:develop
+docker run -dit --restart unless-stopped -h crapi-workshop --name crapi-workshop --net internal \
+    -e IDENTITY_SERVICE=crapi-identity:8080 \
+    -e SECRET_KEY=crapi \
+    -e DB_HOST=postgresdb \
+    -e DB_DRIVER=postgres \
+    -e DB_USER=admin \
+    -e DB_PASSWORD=crapisecretpassword \
+    -e DB_NAME=crapi \
+    -e DB_PORT=5432 \
+    -e MONGO_DB_HOST=mongodb \
+    -e MONGO_DB_DRIVER=mongodb \
+    -e MONGO_DB_PORT=27017 \
+    -e MONGO_DB_USER=admin \
+    -e MONGO_DB_PASSWORD=crapisecretpassword \
+    -e MONGO_DB_NAME=crapi \
+    -e SERVER_PORT=8000 \
+    crapi/crapi-workshop:develop
+docker run -dit --restart unless-stopped -h crapi-web --name crapi-web --net internal \
+    -e COMMUNITY_SERVICE=crapi-community:8087 \
+    -e IDENTITY_SERVICE=crapi-identity:8080 \
+    -e WORKSHOP_SERVICE=crapi-workshop:8000 \
+    crapi/crapi-web:develop
 docker run -dit --restart unless-stopped -h nginx --name nginx --net internal -p 8080:80 \
   -v /home/ec2-user/default.conf:/etc/nginx/conf.d/default.conf \
   registry.gitlab.com/arcadia-application/nginx/nginxoss:latest

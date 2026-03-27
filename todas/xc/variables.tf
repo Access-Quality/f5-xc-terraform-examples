@@ -38,6 +38,11 @@ variable "boutique_domain" {
   description = "FQDN for Online Boutique (e.g. boutique-aws.prod.example.com)"
 }
 
+variable "crapi_domain" {
+  type        = string
+  description = "FQDN for crAPI (e.g. crapi-aws.prod.example.com)"
+}
+
 variable "xc_waf_blocking" {
   type        = bool
   description = "Set WAF to blocking (true) or monitoring (false) mode"

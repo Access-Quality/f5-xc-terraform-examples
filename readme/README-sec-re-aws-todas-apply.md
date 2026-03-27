@@ -1,12 +1,13 @@
-# Seguridad en RE para Arcadia + DVWA + Boutique en AWS - Deploy
+# Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS - Deploy
 
-Este workflow despliega una solucion de **WAF sobre el Regional Edge (RE) de F5 Distributed Cloud** para **tres aplicaciones distintas en la misma instancia EC2** de AWS:
+Este workflow despliega una solucion de **WAF sobre el Regional Edge (RE) de F5 Distributed Cloud** para **cuatro aplicaciones distintas en la misma instancia EC2** de AWS:
 
 - **Arcadia Finance**, accesible por `ARCADIA_DOMAIN`
 - **DVWA**, accesible por `DVWA_DOMAIN`
 - **Online Boutique**, accesible por `BOUTIQUE_DOMAIN`
+- **crAPI**, accesible por `CRAPI_DOMAIN`
 
-Las tres aplicaciones corren en una sola VM Amazon Linux 2. Dentro de la instancia se levanta un **nginx compartido** que enruta por `Host` hacia los contenedores correctos. En F5 XC se publica **un solo HTTP Load Balancer** que anuncia los tres FQDN y apunta al mismo origin pool.
+Las cuatro aplicaciones corren en una sola VM Amazon Linux 2. Dentro de la instancia se levanta un **nginx compartido** que enruta por `Host` hacia los contenedores correctos. En F5 XC se publica **un solo HTTP Load Balancer** que anuncia los cuatro FQDN y apunta al mismo origin pool.
 
 ---
 
@@ -16,12 +17,13 @@ Las tres aplicaciones corren en una sola VM Amazon Linux 2. Dentro de la instanc
 
 | Capacidad | Descripcion |
 | --- | --- |
-| Tres apps en una sola VM | Arcadia, DVWA y Online Boutique comparten la misma EC2 sin necesidad de Kubernetes ni EKS |
-| Publicacion por FQDN | Cada aplicacion se publica con su propio dominio: `ARCADIA_DOMAIN`, `DVWA_DOMAIN` y `BOUTIQUE_DOMAIN` |
+| Cuatro apps en una sola VM | Arcadia, DVWA, Online Boutique y crAPI comparten la misma EC2 sin necesidad de Kubernetes ni EKS |
+| Publicacion por FQDN | Cada aplicacion se publica con su propio dominio: `ARCADIA_DOMAIN`, `DVWA_DOMAIN`, `BOUTIQUE_DOMAIN` y `CRAPI_DOMAIN` |
 | WAF en Regional Edge | El trafico entra por el RE global de F5 XC antes de llegar a AWS |
 | API Security para Arcadia | Arcadia mantiene API Discovery y API Protection con su swagger OpenAPI |
 | WAF para DVWA | DVWA queda expuesta con WAF en el RE para pruebas de seguridad web |
 | WAF para Online Boutique | Online Boutique queda expuesta con WAF en el RE para pruebas de frontend HTTP |
+| WAF para crAPI | crAPI queda expuesta en la misma VM para pruebas REST sin Kubernetes |
 | Infraestructura efimera | Todo se crea con Terraform y se destruye con un workflow dedicado |
 
 ### Arquitectura conceptual
@@ -38,6 +40,7 @@ Internet
 |    - ARCADIA_DOMAIN                                       |
 |    - DVWA_DOMAIN                                          |
 |    - BOUTIQUE_DOMAIN                                      |
+|    - CRAPI_DOMAIN                                         |
 |                                                           |
 |  Un solo LB apunta al mismo Origin Pool                   |
 +-----------------------------------------------------------+
@@ -52,6 +55,7 @@ Internet
 |    - Arcadia Finance containers                            |
 |    - DVWA container                                        |
 |    - Online Boutique containers                            |
+|    - crAPI containers                                      |
 +-----------------------------------------------------------+
 ```
 
@@ -63,7 +67,7 @@ Internet
 todas/infra  -> VPC + Subnet publica + Internet Gateway + Security Group
       |
       v
-todas/vm     -> EC2 + Elastic IP + Arcadia + DVWA + Boutique + nginx reverse proxy
+todas/vm     -> EC2 + Elastic IP + Arcadia + DVWA + Boutique + crAPI + nginx reverse proxy
       |
       v
 todas/xc     -> XC Namespace + Origin Pool + HTTP LB unico + WAF
@@ -74,12 +78,13 @@ todas/xc     -> XC Namespace + Origin Pool + HTTP LB unico + WAF
 ## Objetivo del workflow
 
 1. Aprovisionar la red base en AWS.
-2. Desplegar una sola EC2 con Arcadia, DVWA y Online Boutique en contenedores separados.
+2. Desplegar una sola EC2 con Arcadia, DVWA, Online Boutique y crAPI en contenedores separados.
 3. Configurar un nginx local que enrute por `Host`:
    - `ARCADIA_DOMAIN` -> Arcadia
    - `DVWA_DOMAIN` -> DVWA
   - `BOUTIQUE_DOMAIN` -> Online Boutique
-4. Crear en F5 XC un solo HTTP Load Balancer para publicar los tres dominios en el RE.
+  - `CRAPI_DOMAIN` -> crAPI
+4. Crear en F5 XC un solo HTTP Load Balancer para publicar los cuatro dominios en el RE.
 
 ---
 
@@ -115,6 +120,7 @@ todas/xc     -> XC Namespace + Origin Pool + HTTP LB unico + WAF
 | `ARCADIA_DOMAIN` | `arcadia.example.com` | FQDN publico de Arcadia |
 | `DVWA_DOMAIN` | `dvwa.example.com` | FQDN publico de DVWA |
 | `BOUTIQUE_DOMAIN` | `boutique.example.com` | FQDN publico de Online Boutique |
+| `CRAPI_DOMAIN` | `crapi.example.com` | FQDN publico de crAPI |
 | `XC_WAF_BLOCKING` | `true` | Activa WAF en bloqueo o monitoreo |
 | `XC_BOT_DEFENSE` | `false` | Activa Bot Defense en Arcadia |
 
@@ -123,7 +129,7 @@ todas/xc     -> XC Namespace + Origin Pool + HTTP LB unico + WAF
 | Workspace | Uso |
 | --- | --- |
 | `sec-re-aws-todas-infra` | Infraestructura AWS |
-| `sec-re-aws-todas-vm` | VM compartida con Arcadia y DVWA |
+| `sec-re-aws-todas-vm` | VM compartida con Arcadia, DVWA, Boutique y crAPI |
 | `sec-re-aws-todas-xc` | Objetos de F5 XC |
 
 ---
@@ -140,14 +146,14 @@ todas/xc     -> XC Namespace + Origin Pool + HTTP LB unico + WAF
 - Directorio: `todas/vm`
 - Crea una EC2 con Elastic IP.
 - Instala Docker.
-- Levanta Arcadia, DVWA y Online Boutique en la misma red Docker.
-- Publica los tres servicios a traves de un nginx local en el puerto `8080`.
+- Levanta Arcadia, DVWA, Online Boutique y crAPI en la misma red Docker.
+- Publica los cuatro servicios a traves de un nginx local en el puerto `8080`.
 
 ### `terraform_xc`
 
 - Directorio: `todas/xc`
 - Crea un origin pool comun hacia la misma VM.
-- Publica **Arcadia**, **DVWA** y **Online Boutique** en un solo HTTP Load Balancer con los tres dominios.
+- Publica **Arcadia**, **DVWA**, **Online Boutique** y **crAPI** en un solo HTTP Load Balancer con los cuatro dominios.
 - Mantiene API Discovery y API Protection para Arcadia.
 
 ---
@@ -159,6 +165,7 @@ El archivo `todas/vm/userdata.sh` genera un `default.conf` para nginx con routin
 - `server_name ARCADIA_DOMAIN` -> Arcadia
 - `server_name DVWA_DOMAIN` -> DVWA
 - `server_name BOUTIQUE_DOMAIN` -> Online Boutique
+- `server_name CRAPI_DOMAIN` -> crAPI
 
 Esto evita problemas de path-based routing como `/arcadia` o `/dvwa`, y deja cada aplicacion en su raiz natural.
 
@@ -181,6 +188,11 @@ Esto evita problemas de path-based routing como `/arcadia` o `/dvwa`, y deja cad
 - URL esperada: `http://BOUTIQUE_DOMAIN/`
 - Permite pruebas de WAF sobre el frontend HTTP de ecommerce.
 
+### crAPI
+
+- URL esperada: `http://CRAPI_DOMAIN/`
+- Permite pruebas de WAF y API REST sobre crAPI sin desplegar EKS.
+
 ---
 
 ## Ejecucion manual
@@ -188,13 +200,13 @@ Esto evita problemas de path-based routing como `/arcadia` o `/dvwa`, y deja cad
 ### Deploy
 
 1. Ir a **Actions**.
-2. Ejecutar `Seguridad en RE para Arcadia + DVWA en AWS - Deploy`.
+2. Ejecutar `Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS - Deploy`.
 3. Esperar a que terminen `terraform_infra`, `terraform_vm` y `terraform_xc`.
 
 ### Destroy
 
 1. Ir a **Actions**.
-2. Ejecutar `Seguridad en RE para Arcadia + DVWA en AWS - Destroy`.
+2. Ejecutar `Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS - Destroy`.
 3. El orden de destruccion es:
    - XC
    - VM
@@ -214,6 +226,9 @@ Esto evita problemas de path-based routing como `/arcadia` o `/dvwa`, y deja cad
 
 - **Arcadia carga pero DVWA no responde:**
   Verificar que el request llegue con el host correcto `DVWA_DOMAIN`. El nginx interno enruta por `server_name`.
+
+- **crAPI no responde pero las otras apps si:**
+  Revisar el arranque de `postgresdb`, `mongodb`, `mailhog`, `crapi-identity`, `crapi-community`, `crapi-workshop` y `crapi-web` dentro de la EC2.
 
 - **DVWA responde pero Arcadia falla en endpoints API:**
   Verificar que el swagger de Arcadia se haya subido correctamente al object store de F5 XC.
