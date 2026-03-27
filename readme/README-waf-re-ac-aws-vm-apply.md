@@ -356,6 +356,99 @@ Después de hacer login, ir a **DVWA Security** en el menú lateral y selecciona
 | **CSRF**                 | Cross-Site Request Forgery           | Usar el formulario de cambio de contraseña                       |
 | **Brute Force**          | Fuerza bruta en login                | Probar combinaciones de usuario/contraseña por formulario        |
 
+### Mitigación de fuerza bruta en F5 XC
+
+El módulo **Brute Force** de DVWA expone el endpoint `/dvwa/login.php` sin límite de intentos. Un atacante puede usar herramientas como Hydra, Burp Intruder o ZAP Fuzzer para hacer miles de intentos en segundos:
+
+```bash
+# Ejemplo de ataque con Hydra
+hydra -l admin -P /usr/share/wordlists/rockyou.txt <DVWA_DOMAIN> http-post-form \
+  "/dvwa/login.php:username=^USER^&password=^PASS^&Login=Login:Login failed"
+```
+
+Cada intento fallido devuelve HTTP 200 (redirección al login), no 401, lo que complica la detección por código de estado. F5 XC ofrece cuatro capas de mitigación que se activan desde la consola sin modificar la infraestructura:
+
+#### Capa 1 — Rate Limiting (más simple)
+
+**Dónde:** `Multi-Cloud App Connect → Load Balancers → HTTP Load Balancers → [tu LB] → Edit → Rate Limiting`
+
+- Habilitar **Rate Limiting**
+- Configurar: `10 requests / 60 segundos por IP` hacia `/dvwa/login.php`
+- Mode: **Block** (responde 429 Too Many Requests)
+- Aplicar la regla solo al path `/login` con un **Rate Limit Policy** para no afectar el resto de la app
+
+**Efecto:** Hydra/ZAP quedan limitados a 10 intentos por minuto — un ataque de fuerza bruta contra cualquier contraseña con mínima complejidad se vuelve inviable.
+
+**Limitación:** Un atacante con botnet que rota IPs evita esta capa (cada IP hace 1-2 intentos).
+
+#### Capa 2 — Malicious User Detection (más efectiva para rotatoria de IPs)
+
+**Dónde:** `[tu LB] → Edit → Security → Malicious User Detection → Enable`
+
+En lugar de rastrear solo por IP, F5 XC construye un **perfil de comportamiento del usuario** en el tiempo:
+
+- Detecta: alta tasa de respuestas con el mismo código de estado, acceso repetitivo al mismo path, ausencia de navegación normal (solo POST a `/login`)
+- La "identidad" se basa en IP + headers + fingerprint del cliente, no solo IP
+- Configurar umbral: ej. `50 errores de login en 5 minutos → Block ese user identity por 10 minutos`
+
+**Efecto:** Aunque el atacante rote IPs, el patrón de comportamiento lo delata y queda bloqueado.
+
+#### Capa 3 — Bot Defense con JS Challenge (más efectiva contra herramientas automatizadas)
+
+**Dónde:** `[tu LB] → Edit → Bot Defense → Enable`
+
+F5 XC inyecta un **JavaScript challenge** antes de servir la página de login:
+
+1. Cliente pide `GET /dvwa/login.php`
+2. F5 XC no devuelve la página — devuelve un JS que el browser debe ejecutar (fingerprinting, prueba de trabajo)
+3. Solo si el resultado es válido, XC libera la request al origen
+
+**Por qué rompe las herramientas:**
+
+| Herramienta          | Resultado                                                         |
+| -------------------- | ----------------------------------------------------------------- |
+| Hydra                | Hace requests HTTP crudas sin ejecutar JS → bloqueado             |
+| Burp Intruder        | Modo scanner no ejecuta JS → bloqueado                            |
+| ZAP Fuzzer           | Sin browser headless → bloqueado                                  |
+| Browser real (Chrome/Firefox) | Pasa el challenge transparentemente, sin ver ningún CAPTCHA |
+
+> El JS Challenge es **invisible para el usuario legítimo**. Solo se muestra un CAPTCHA si el JS Challenge falla (nivel de desconfianza mayor).
+
+#### Capa 4 — IP Reputation (bloqueo preventivo)
+
+**Dónde:** `[tu LB] → Edit → Security → IP Reputation → Enable`
+
+- Categorías recomendadas: **Tor Exit Nodes**, **Anonymous Proxies**, **Scanners**, **Botnets**
+- Las IPs de atacantes conocidos se bloquean antes de hacer un solo intento de login
+
+#### Estrategia en capas recomendada
+
+```
+Request a /dvwa/login.php
+         │
+         ▼
+[IP Reputation] ──────────── IP conocida como scanner/TOR → BLOCK inmediato
+         │
+         ▼
+[Bot Defense / JS Challenge] ── No ejecuta JS → BLOCK (elimina Hydra/ZAP/Burp)
+         │
+         ▼
+[Rate Limiting 10req/min/IP] ── Demasiadas requests → 429
+         │
+         ▼
+[Malicious User Detection] ──── Patrón sospechoso → BLOCK temporal
+         │
+         ▼
+[WAF en bloqueo] ─────────────── Payloads maliciosos → BLOCK
+         │
+         ▼
+       DVWA (origen — IP privada vía AppConnect)
+```
+
+Cada capa elimina una clase diferente de atacante. Un atacante que pasa todas las capas queda limitado a ~10 intentos/minuto, lo que hace el ataque computacionalmente inviable contra cualquier contraseña con mínima complejidad.
+
+Los eventos de bloqueo de todas las capas quedan registrados en `F5 XC → Security → Security Events` del namespace correspondiente.
+
 ### Verificación del WAF
 
 Con la WAF policy de F5 XC en **modo blocking**, los ataques deben ser **bloqueados** y el cliente recibe una respuesta de bloqueo (por defecto HTTP 200 con página de bloqueo de F5 XC, o configurable a 403).
