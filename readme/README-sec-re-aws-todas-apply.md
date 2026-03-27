@@ -553,6 +553,10 @@ Casos sugeridos:
 - envio de payloads malformed en query params o body
 - revision de eventos de Bot Defense sobre `POST /trading/auth.php`
 
+Guia detallada:
+
+- [Pruebas de seguridad para Arcadia Finance](README-pruebas-arcadia.md)
+
 ### DVWA
 
 Casos sugeridos:
