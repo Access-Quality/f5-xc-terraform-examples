@@ -33,10 +33,6 @@ upstream boutique {
     server frontend:8080;
 }
 
-upstream crapi {
-    server crapi-web:80;
-}
-
 server {
     listen 80 default_server;
     server_name _;
@@ -124,6 +120,7 @@ server {
 server {
     listen 80;
     server_name ${crapi_domain};
+    resolver 127.0.0.11 ipv6=off valid=10s;
 
     location = /healthz {
         access_log off;
@@ -131,10 +128,11 @@ server {
     }
 
     location / {
+        set $crapi_upstream http://crapi-web:80;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_pass http://crapi/;
+        proxy_pass $crapi_upstream;
     }
 }
 NGINXCONF
@@ -198,6 +196,10 @@ docker run -dit --restart unless-stopped -h frontend --name frontend --net inter
     -e AD_SERVICE_ADDR=adservice:9555 \
     -e ENABLE_PROFILER=0 \
     gcr.io/google-samples/microservices-demo/frontend:v0.8.0
+docker run -dit --restart unless-stopped -h nginx --name nginx --net internal -p 8080:80 \
+    -v /home/ec2-user/default.conf:/etc/nginx/conf.d/default.conf \
+    registry.gitlab.com/arcadia-application/nginx/nginxoss:latest
+
 docker run -dit --restart unless-stopped -h postgresdb --name postgresdb --net internal \
     -e POSTGRES_USER=admin \
     -e POSTGRES_PASSWORD=crapisecretpassword \
@@ -282,6 +284,3 @@ docker run -dit --restart unless-stopped -h crapi-web --name crapi-web --net int
     -e IDENTITY_SERVICE=crapi-identity:8080 \
     -e WORKSHOP_SERVICE=crapi-workshop:8000 \
     crapi/crapi-web:develop
-docker run -dit --restart unless-stopped -h nginx --name nginx --net internal -p 8080:80 \
-  -v /home/ec2-user/default.conf:/etc/nginx/conf.d/default.conf \
-  registry.gitlab.com/arcadia-application/nginx/nginxoss:latest
