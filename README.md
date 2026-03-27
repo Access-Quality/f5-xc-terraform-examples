@@ -66,9 +66,9 @@ Despliega una **aplicación distribuida multi-cloud** donde los microservicios d
 
 ---
 
-### 8. Seguridad en RE para Arcadia + DVWA + Boutique + crAPI + Mailhog en AWS — `sec-re-aws-todas-apply.yml`
+### 8. Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS — `sec-re-aws-todas-apply.yml`
 
-Despliega una solucion de **seguridad en el Regional Edge (RE) de F5 Distributed Cloud** para **cinco aplicaciones distintas publicadas desde una sola instancia EC2** de AWS: **Arcadia Finance**, **DVWA**, **Online Boutique**, **crAPI** y **Mailhog**. Cada aplicacion se expone con su propio FQDN, `ARCADIA_DOMAIN`, `DVWA_DOMAIN`, `BOUTIQUE_DOMAIN`, `CRAPI_DOMAIN` y `MAILHOG_DOMAIN`, pero todas comparten la misma VM y el mismo Elastic IP. Dentro de la instancia corre un **nginx instalado en el host** que enruta por `Host` hacia contenedores Docker publicados solo en `127.0.0.1`, lo que simplifica el health check y deja el puerto de origen fijo en `80`.
+Despliega una solucion de **seguridad en el Regional Edge (RE) de F5 Distributed Cloud** para **cuatro aplicaciones principales publicadas desde una sola instancia EC2** de AWS: **Arcadia Finance**, **DVWA**, **Online Boutique** y **crAPI**. Ademas, el mismo entorno publica **Mailhog** solo como **interfaz web de apoyo para crAPI**, accesible mediante `MAILHOG_DOMAIN`. Dentro de la instancia corre un **nginx instalado en el host** que enruta por `Host` hacia contenedores Docker publicados solo en `127.0.0.1`, lo que simplifica el health check y deja el puerto de origen fijo en `80`.
 
 En F5 XC se crea **un solo HTTP Load Balancer** que anuncia los cinco dominios y apunta a **un solo origin pool**. Sobre ese LB se aplican controles globales de seguridad:
 
@@ -98,7 +98,7 @@ La siguiente tabla resume la topología de cada caso: dónde se inspecciona el t
 | 5 | `f5xc-api-ce-eks-apply.yml` | API WAF en RE para CE dentro de EKS | crAPI | WAF · API | **RE + CE** | ✅ | ✅ CE dentro del clúster EKS | ✅ | ✅ | Clúster EKS | AWS |
 | 6 | `teachable-01-mc-networkconnect-apply.yml` | Teachable 01-mcn-networkconnect | — (MCN) | — | **CE** (MCN este-oeste) | ✅ Global VN | ✅ AWS + Azure | ❌ | ✅ | VMs en AWS y Azure | AWS + Azure |
 | 7 | `bookinfo-smcn-apply.yaml` | Secure Multi-Cloud Networking | Bookinfo | WAF | **RE + CE** | ✅ | ✅ EKS + AKS | ✅ | ✅ | Clústeres EKS + AKS | AWS + Azure |
-| 8 | `sec-re-aws-todas-apply.yml` | Seguridad en RE para Arcadia + DVWA + Boutique + crAPI + Mailhog en AWS | Arcadia Finance + DVWA + Online Boutique + crAPI + Mailhog | WAF · API · BD | **RE** (Regional Edge) | ✅ | ❌ | ❌ | ❌ | VM (EC2) compartida | AWS |
+| 8 | `sec-re-aws-todas-apply.yml` | Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS | Arcadia Finance + DVWA + Online Boutique + crAPI | WAF · API · BD | **RE** (Regional Edge) | ✅ | ❌ | ❌ | ❌ | VM (EC2) compartida | AWS |
 
 > **Pruebas de seguridad:** WAF = Web Application Firewall (SQLi, XSS, RCE…) · API = API Discovery + API Protection · BD = Bot Defense
 
@@ -143,14 +143,14 @@ Cada caso de uso incluye una aplicación diferente. La siguiente tabla resume qu
 | `f5xc-api-ce-eks-apply.yml`                | API Security + WAF en RE + CE en EKS     | [README](readme/README-f5xc-api-ce-eks-apply.md)                  |
 | `teachable-01-mc-networkconnect-apply.yml` | MCN Network Connect                      | [README](readme/README-teachable-01-mcn-networkconnect-apply.md)  |
 | `bookinfo-smcn-apply.yaml`                 | Multi-cloud + WAF                        | [README](readme/README-bookinfo-smcn-apply.md)                    |
-| `sec-re-aws-todas-apply.yml`               | WAF global + API Discovery/Protection para Arcadia y crAPI + Bot Defense opcional + Mailhog publico | [README](readme/README-sec-re-aws-todas-apply.md)           |
+| `sec-re-aws-todas-apply.yml`               | WAF global + API Discovery/Protection para Arcadia y crAPI + Bot Defense opcional + interfaz web de apoyo para crAPI | [README](readme/README-sec-re-aws-todas-apply.md)           |
 
 ---
 
 ## Historial de Cambios
 
 ### 2026-03-27
-- **Seguridad en RE para Arcadia + DVWA + Boutique + crAPI + Mailhog en AWS** (`sec-re-aws-todas-apply.yml` / `sec-re-aws-todas-destroy.yml`): el caso compartido en una sola VM EC2 de AWS publica ahora tambien **Mailhog** con un quinto FQDN (`MAILHOG_DOMAIN`) sobre el mismo nginx del host y el mismo HTTP Load Balancer de F5 XC. Esto permite acceder desde internet a la interfaz web de Mailhog usada por crAPI, manteniendo el patron de enrutamiento por `Host` y las validaciones de readiness sobre origen y endpoints publicos.
+- **Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS** (`sec-re-aws-todas-apply.yml` / `sec-re-aws-todas-destroy.yml`): el caso compartido en una sola VM EC2 de AWS publica tambien **Mailhog** como interfaz web de apoyo para crAPI con el FQDN `MAILHOG_DOMAIN`, sobre el mismo nginx del host y el mismo HTTP Load Balancer de F5 XC. Esto permite revisar desde internet los correos de laboratorio usados por crAPI, manteniendo el patron de enrutamiento por `Host` y las validaciones de readiness sobre origen y endpoints publicos.
 
 ### 2026-03-26
 - **API + WAF + Bot Defense en RE AWS** (`waf-re-aws-apply.yml` / `waf-re-aws-destroy.yml`): workflows renombrados a `API + WAF + BD` para reflejar que incluyen **WAF**, **API Discovery**, **API Protection** y **Bot Defense** (opcional vía variable `XC_BOT_DEFENSE`). Se agregó `VOLT_API_P12_FILE` al job `terraform_xc` de ambos workflows para correcta autenticación del provider de F5 XC.

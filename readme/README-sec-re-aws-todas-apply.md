@@ -1,14 +1,14 @@
-# Seguridad en RE para Arcadia + DVWA + Boutique + crAPI + Mailhog en AWS - Deploy
+# Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS - Deploy
 
-Este workflow despliega una solucion de **seguridad en el Regional Edge (RE) de F5 Distributed Cloud** para **cinco aplicaciones distintas alojadas en una sola instancia EC2 de AWS**:
+Este workflow despliega una solucion de **seguridad en el Regional Edge (RE) de F5 Distributed Cloud** para **cuatro aplicaciones principales alojadas en una sola instancia EC2 de AWS**:
 
 - **Arcadia Finance**, publicada por `ARCADIA_DOMAIN`
 - **DVWA**, publicada por `DVWA_DOMAIN`
 - **Online Boutique**, publicada por `BOUTIQUE_DOMAIN`
 - **crAPI**, publicada por `CRAPI_DOMAIN`
-- **Mailhog**, publicada por `MAILHOG_DOMAIN`
+- **Mailhog**, publicada por `MAILHOG_DOMAIN` solo como **interfaz web de apoyo para crAPI**
 
-Las cinco aplicaciones comparten la misma VM. Dentro de la instancia corre un **nginx instalado en el host** que enruta por `Host` hacia contenedores Docker publicados solo en `127.0.0.1`. En F5 XC se crea **un unico HTTP Load Balancer** que anuncia los cinco FQDN y apunta a un solo origin pool.
+Las cuatro aplicaciones principales y la interfaz web de apoyo comparten la misma VM. Dentro de la instancia corre un **nginx instalado en el host** que enruta por `Host` hacia contenedores Docker publicados solo en `127.0.0.1`. En F5 XC se crea **un unico HTTP Load Balancer** que anuncia los cinco FQDN y apunta a un solo origin pool.
 
 El caso esta pensado para demostrar, en una topologia simple y barata de operar, las siguientes capacidades:
 
@@ -16,7 +16,7 @@ El caso esta pensado para demostrar, en una topologia simple y barata de operar,
 - API Discovery global sobre el load balancer compartido
 - API Protection global en modo report usando specs de Arcadia y/o crAPI
 - Bot Defense opcional sobre Arcadia en modo flag
-- acceso publico a Mailhog para revisar el correo de laboratorio de crAPI
+- acceso publico a Mailhog solo como interfaz web de apoyo para revisar el correo de laboratorio de crAPI
 - Multiples aplicaciones expuestas por FQDN sin EKS ni Kubernetes
 - Provisionamiento y destruccion completos con GitHub Actions + Terraform
 
