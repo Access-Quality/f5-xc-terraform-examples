@@ -188,7 +188,7 @@ docker run -dit --restart unless-stopped -h mongodb --name mongodb --net interna
     -e MONGO_INITDB_ROOT_PASSWORD=crapisecretpassword \
     -v crapi-mongodb-data:/data/db \
     mongo:5.0
-docker run -dit --restart unless-stopped -h mailhog --name mailhog --net internal \
+docker run -dit --restart unless-stopped -h mailhog --name mailhog --net internal --network-alias mailhog-web \
     -e MH_MONGO_URI=admin:crapisecretpassword@mongodb:27017 \
     -e MH_STORAGE=mongodb \
     crapi/mailhog:latest
@@ -272,6 +272,9 @@ docker run -dit --restart unless-stopped -h crapi-workshop --name crapi-workshop
     -e API_GATEWAY_URL=https://gateway-service \
     -e TLS_ENABLED=false \
     crapi/crapi-workshop:develop
+
+sleep 15
+
 docker run -dit --restart unless-stopped -h crapi-web --name crapi-web --net internal \
     -p 127.0.0.1:18086:80 \
     -e COMMUNITY_SERVICE=crapi-community:8087 \
