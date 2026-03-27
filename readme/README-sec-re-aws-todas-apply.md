@@ -55,6 +55,12 @@ La diferencia principal es esta:
 - **caso 8**: nginx concentra el trafico en `:80` y hace el routing localmente en la VM
 - **caso 9**: no usa nginx; XC hace el routing por `Host` y `path` hacia varios origin pools sobre la misma VM
 
+Si quieres mantener la **VM compartida sin nginx**, pero separar la exposicion publica en **cuatro HTTP Load Balancers de XC**, revisa el **caso 10** en `readme/README-sec-re-aws-todas-4lbs-apply.md`.
+
+La diferencia principal de esa variante es esta:
+
+- **caso 10**: no usa nginx; XC publica **4 LBs** separados: Arcadia, DVWA, Boutique y crAPI+Mailhog
+
 ---
 
 ## 2. Arquitectura final

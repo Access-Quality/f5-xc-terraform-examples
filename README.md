@@ -95,6 +95,23 @@ Este caso sirve para mostrar un patron donde la logica de enrutamiento se mueve 
 
 ---
 
+### 10. Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS con 4 LBs XC — `sec-re-aws-todas-4lbs.yml`
+
+Despliega una solucion de **seguridad en el Regional Edge (RE) de F5 Distributed Cloud** para **cuatro aplicaciones principales publicadas desde una sola instancia EC2** de AWS: **Arcadia Finance**, **DVWA**, **Online Boutique** y **crAPI**, con **Mailhog** como interfaz web de apoyo. Igual que en el caso 9, **no se instala nginx** en la VM y cada servicio queda expuesto directamente en un puerto distinto del host.
+
+La diferencia clave es que F5 XC crea **cuatro HTTP Load Balancers separados**:
+
+- un LB para Arcadia
+- un LB para DVWA
+- un LB para Boutique
+- un LB para crAPI, compartido con Mailhog
+
+Este caso sirve para mostrar un patron de aislamiento logico por aplicacion en el edge sin dejar de reutilizar una sola VM compartida en AWS.
+
+👉 [Ver guía completa](readme/README-sec-re-aws-todas-4lbs-apply.md)
+
+---
+
 ### Comparativa de Arquitectura por Caso de Uso
 
 La siguiente tabla resume la topología de cada caso: dónde se inspecciona el tráfico, si fluye por el Regional Edge global de F5, si se instala un Customer Edge en el entorno del cliente y si la aplicación puede permanecer en una red privada sin IP pública expuesta.
@@ -110,6 +127,7 @@ La siguiente tabla resume la topología de cada caso: dónde se inspecciona el t
 | 7 | `bookinfo-smcn-apply.yaml` | Secure Multi-Cloud Networking | Bookinfo | WAF | **RE + CE** | ✅ | ✅ EKS + AKS | ✅ | ✅ | Clústeres EKS + AKS | AWS + Azure |
 | 8 | `sec-re-aws-todas-apply.yml` | Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS | Arcadia Finance + DVWA + Online Boutique + crAPI | WAF · API · BD | **RE** (Regional Edge) | ✅ | ❌ | ❌ | ❌ | VM (EC2) compartida | AWS |
 | 9 | `sec-re-aws-todas-sin-ngix-apply.yml` | Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS sin nginx | Arcadia Finance + DVWA + Online Boutique + crAPI | WAF · API · BD | **RE** (Regional Edge) | ✅ | ❌ | ❌ | ❌ | VM (EC2) compartida sin nginx | AWS |
+| 10 | `sec-re-aws-todas-4lbs.yml` | Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS con 4 LBs XC | Arcadia Finance + DVWA + Online Boutique + crAPI | WAF · API · BD | **RE** (Regional Edge) | ✅ | ❌ | ❌ | ❌ | VM (EC2) compartida sin nginx + 4 LBs | AWS |
 
 > **Pruebas de seguridad:** WAF = Web Application Firewall (SQLi, XSS, RCE…) · API = API Discovery + API Protection · BD = Bot Defense
 
@@ -125,7 +143,7 @@ La siguiente tabla resume la topología de cada caso: dónde se inspecciona el t
 
 Cada caso de uso incluye una aplicación diferente. La siguiente tabla resume qué tipo de pruebas encajan mejor con cada una:
 
-| Tipo de prueba                             | Arcadia Finance (caso 1) | DVWA (caso 4) | Online Boutique (casos 2 y 3) | crAPI (caso 5) | Arcadia + DVWA + Boutique + crAPI (casos 8 y 9) |
+| Tipo de prueba                             | Arcadia Finance (caso 1) | DVWA (caso 4) | Online Boutique (casos 2 y 3) | crAPI (caso 5) | Arcadia + DVWA + Boutique + crAPI (casos 8, 9 y 10) |
 | ------------------------------------------ | :----------------------: | :-----------: | :---------------------------: | :------------: | :---------------------: |
 | WAF — SQLi, XSS, Command Injection         | ✅                        | ✅ Ideal       | ⚠️ Limitado                   | ⚠️ Parcial     | ✅ Ideal                |
 | WAF — File upload / RCE                    | ❌                        | ✅ Ideal       | ❌                             | ❌              | ✅ Válido               |
@@ -157,12 +175,16 @@ Cada caso de uso incluye una aplicación diferente. La siguiente tabla resume qu
 | `sec-re-aws-todas-apply.yml`               | WAF global + API Discovery/Protection para Arcadia y crAPI + Bot Defense opcional + interfaz web de apoyo para crAPI | [README](readme/README-sec-re-aws-todas-apply.md)           |
 | `sec-re-aws-todas-sin-ngix-apply.yml`      | WAF global + routing en XC sin nginx en la VM + API Discovery/Protection para Arcadia y crAPI + Bot Defense opcional | [README](readme/README-sec-re-aws-todas-sin-nginx-apply.md) |
 | `sec-re-aws-todas-sin-ngix-destroy.yml`    | Destroy del caso 9: elimina XC, limpia specs, destruye VM y luego infra | [README](readme/README-sec-re-aws-todas-sin-nginx-apply.md) |
+| `sec-re-aws-todas-4lbs.yml`                | WAF global + 4 LBs en XC sobre una sola VM sin nginx + API Discovery/Protection para Arcadia y crAPI + Bot Defense opcional | [README](readme/README-sec-re-aws-todas-4lbs-apply.md) |
+| `sec-re-aws-todas-4lbs-destroy.yml`        | Destroy del caso 10: elimina XC, limpia specs, destruye VM y luego infra | [README](readme/README-sec-re-aws-todas-4lbs-apply.md) |
 
 ---
 
 ## Historial de Cambios
 
 ### 2026-03-27
+- **Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS con 4 LBs XC** (`sec-re-aws-todas-4lbs.yml` / `sec-re-aws-todas-4lbs-destroy.yml`): nuevo caso 10 que reutiliza la VM compartida sin nginx del caso 9, pero divide la exposicion publica en **4 HTTP Load Balancers** de F5 XC. Arcadia, DVWA y Boutique usan LBs dedicados; **crAPI y Mailhog** comparten el cuarto LB. Se agregan guias dedicadas de despliegue y pruebas para este caso.
+
 - **Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS sin nginx** (`sec-re-aws-todas-sin-ngix-apply.yml` / `sec-re-aws-todas-sin-ngix-destroy.yml`): nuevo caso 9 que reutiliza el patron de una sola VM compartida en AWS pero elimina nginx del host. El routing por `Host` y `path` se mueve al HTTP Load Balancer de F5 XC usando multiples origin pools sobre la misma Elastic IP y distintos puertos de la VM. Se agrega una guia dedicada para este caso, se documenta el tradeoff de seguridad por exponer varios puertos en el security group y se incorpora el workflow de destroy correspondiente.
 
 - **Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS** (`sec-re-aws-todas-apply.yml` / `sec-re-aws-todas-destroy.yml`): el caso compartido en una sola VM EC2 de AWS publica tambien **Mailhog** como interfaz web de apoyo para crAPI con el FQDN `MAILHOG_DOMAIN`, sobre el mismo nginx del host y el mismo HTTP Load Balancer de F5 XC. Esto permite revisar desde internet los correos de laboratorio usados por crAPI, manteniendo el patron de enrutamiento por `Host` y las validaciones de readiness sobre origen y endpoints publicos.
