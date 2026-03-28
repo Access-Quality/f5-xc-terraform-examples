@@ -72,12 +72,17 @@ Esperado:
 ### 3.3. Verificar sesion funcional
 
 ```bash
-curl -s "${ARC_BASE}/trading/rest/portfolio.php" \
-  -b "${ARC_COOKIE}" | python3 -m json.tool
+curl -s "${ARC_BASE}/trading/index.php" \
+  -b "${ARC_COOKIE}" | grep -i "Arcadia - Account Information"
 
 curl -s "${ARC_BASE}/api/side_bar_accounts.php" \
-  -b "${ARC_COOKIE}" | python3 -m json.tool
+  -b "${ARC_COOKIE}" | grep -E "Select Acount|Acc-"
 ```
+
+Notas:
+
+- `side_bar_accounts.php` devuelve un fragmento HTML con opciones `<option>`, no JSON
+- `trading/rest/portfolio.php` no es una buena verificacion inicial en este despliegue porque puede responder `504` aunque el login haya sido correcto
 
 Si esta parte falla, corrige primero la autenticacion antes de empezar pruebas ofensivas.
 
@@ -195,11 +200,13 @@ Haz login desde navegador y navega por:
 Tambien puedes reforzarlo con `curl` autenticado:
 
 ```bash
-curl -s "${ARC_BASE}/trading/rest/portfolio.php" -b "${ARC_COOKIE}" > /dev/null
+curl -s "${ARC_BASE}/trading/index.php" -b "${ARC_COOKIE}" > /dev/null
 curl -s "${ARC_BASE}/api/side_bar.php" -b "${ARC_COOKIE}" > /dev/null
 curl -s "${ARC_BASE}/api/side_bar_accounts.php" -b "${ARC_COOKIE}" > /dev/null
 curl -s "${ARC_BASE}/trading/transactions.php" -b "${ARC_COOKIE}" > /dev/null
 ```
+
+Si `trading/rest/portfolio.php` responde bien en tu despliegue, puedes añadirlo como trafico adicional, pero no lo uses como comprobacion base porque en este entorno puede devolver `504`.
 
 ### Que revisar en F5 XC
 

@@ -345,14 +345,35 @@ curl -s -X POST "http://arcadia.digitalvs.com/trading/auth.php" \
 # Esperado: location: index.php  → login exitoso
 # Si devuelve location: login.php → credenciales incorrectas
 
-# 2. Verificar que la sesión funciona — portfolio del usuario
-curl -s "http://arcadia.digitalvs.com/trading/rest/portfolio.php" \
-  -b /tmp/arcadia_cookies.txt | python3 -m json.tool
+# 2. Verificar que la sesión funciona — dashboard autenticado
+curl -s "http://arcadia.digitalvs.com/trading/index.php" \
+  -b /tmp/arcadia_cookies.txt | grep -i "Arcadia - Account Information"
 
 # 3. Consultar cuentas disponibles
 curl -s "http://arcadia.digitalvs.com/api/side_bar_accounts.php" \
-  -b /tmp/arcadia_cookies.txt | python3 -m json.tool
+  -b /tmp/arcadia_cookies.txt | grep -E "Select Acount|Acc-"
+
+# Nota: /api/side_bar_accounts.php devuelve HTML con opciones <option>, no JSON.
+# Nota: /trading/rest/portfolio.php puede responder 504 en este despliegue aunque el login haya sido correcto.
 ```
+
+### Generar trafico autenticado para API Discovery
+
+```bash
+curl -s "http://arcadia.digitalvs.com/trading/index.php" \
+  -b /tmp/arcadia_cookies.txt > /dev/null
+
+curl -s "http://arcadia.digitalvs.com/api/side_bar.php" \
+  -b /tmp/arcadia_cookies.txt > /dev/null
+
+curl -s "http://arcadia.digitalvs.com/api/side_bar_accounts.php" \
+  -b /tmp/arcadia_cookies.txt > /dev/null
+
+curl -s "http://arcadia.digitalvs.com/trading/transactions.php" \
+  -b /tmp/arcadia_cookies.txt > /dev/null
+```
+
+Si `trading/rest/portfolio.php` responde bien en tu despliegue, puedes añadirlo como trafico adicional, pero no lo uses como comprobacion base porque en este entorno puede devolver `504`.
 
 ### Módulos y endpoints disponibles
 

@@ -52,6 +52,7 @@ export DVWA_BASE="http://${DVWA_DOMAIN}"
 export BOUTIQUE_BASE="http://${BOUTIQUE_DOMAIN}"
 export CRAPI_BASE="http://${CRAPI_DOMAIN}"
 export MAILHOG_BASE="http://${MAILHOG_DOMAIN}"
+export ARC_COOKIE="/tmp/arcadia_cookie.txt"
 ```
 
 ---
@@ -96,18 +97,33 @@ Arcadia es util para validar WAF web, API Discovery, API Protection y Bot Defens
 ### 4.1. Login funcional
 
 ```bash
-curl -i -X POST "${ARC_BASE}/trading/auth.php" \
+curl -s -X POST "${ARC_BASE}/trading/auth.php" \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "username=matt&password=ilovef5"
+  -d "username=matt&password=ilovef5" \
+  -c "${ARC_COOKIE}" \
+  -D - | grep -i "location:"
 ```
 
 ### 4.2. API Discovery
 
 ```bash
-curl -i "${ARC_BASE}/api/side_bar.php"
-curl -i "${ARC_BASE}/api/side_bar_accounts.php"
-curl -i "${ARC_BASE}/trading/rest/portfolio.php"
+curl -s "${ARC_BASE}/trading/index.php" \
+  -b "${ARC_COOKIE}" | grep -i "Arcadia - Account Information"
+
+curl -s "${ARC_BASE}/api/side_bar.php" \
+  -b "${ARC_COOKIE}" > /dev/null
+
+curl -s "${ARC_BASE}/api/side_bar_accounts.php" \
+  -b "${ARC_COOKIE}" | grep -E "Select Acount|Acc-"
+
+curl -s "${ARC_BASE}/trading/transactions.php" \
+  -b "${ARC_COOKIE}" > /dev/null
 ```
+
+Notas:
+
+- `side_bar_accounts.php` devuelve HTML con opciones `<option>`, no JSON
+- `trading/rest/portfolio.php` puede responder `504` en este despliegue y no es una buena validacion inicial de sesion
 
 ### 4.3. Bot Defense en login
 
