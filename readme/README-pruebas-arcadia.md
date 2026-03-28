@@ -238,12 +238,14 @@ curl -i "${ARC_BASE}/api/side_bar_table.php" \
 
 ### Resultado esperado
 
-- en `report`: deberia observarse como endpoint no documentado tras trafico repetido; puede aparecer primero en `Security Events` antes de verse en `API Discovery` como `Discovered` o `Shadow`
+- en `report`: el trafico deberia ser visible en `Requests` y puede generar observaciones en `Security Events`, pero `side_bar_table.php` no necesariamente sera promovido a `API Discovery` como `Discovered` o `Shadow`
 - en `block`: la UI puede romperse porque ese endpoint participa en el flujo real
 
 Consejo practico:
 
-- una sola llamada con `curl` puede no bastar para que el endpoint aparezca de inmediato en la vista de inventario o discovery
+- que el endpoint no aparezca en `API Discovery` no significa que XC no haya visto la request
+- en este caso, `side_bar_table.php` se usa como fragmento HTML/AJAX de la UI y el motor puede no clasificarlo como `API Endpoint` inventariable
+- una sola llamada con `curl` puede no bastar para que el endpoint aparezca de inmediato en la vista de inventory o discovery
 - si no lo ves, genera varias requests autenticadas o usa el flujo real del navegador y espera unos minutos antes de revisar la consola
 
 Prueba recomendada para forzar observacion en XC:
@@ -265,9 +267,16 @@ done
 
 Despues de lanzar ese bloque:
 
+- confirma primero que el path aparece en `Requests`
 - revisa primero `Security Events`
 - espera unos minutos antes de volver a consultar `API Discovery`
 - si sigue sin aparecer, repite la prueba navegando la UI real desde el browser
+
+Interpretacion recomendada:
+
+- si aparece en `Requests`, XC esta viendo el trafico
+- si aparece en `Security Events`, API Protection esta evaluando esa ruta aunque no suba a `Discovery`
+- si necesitas que la ruta se vea de forma estable en la tabla de endpoints, añadela a la spec OpenAPI para que entre como `Inventory/OpenAPI`
 
 ### Mitigacion recomendada
 
