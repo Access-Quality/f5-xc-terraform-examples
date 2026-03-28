@@ -175,7 +175,7 @@ Cada caso de uso incluye una aplicación diferente. La siguiente tabla resume qu
 | `sec-re-aws-todas-apply.yml`               | WAF global + API Discovery/Protection para Arcadia y crAPI + Bot Defense opcional + interfaz web de apoyo para crAPI | [README](readme/README-sec-re-aws-todas-apply.md)           |
 | `sec-re-aws-todas-sin-ngix-apply.yml`      | WAF global + routing en XC sin nginx en la VM + API Discovery/Protection para Arcadia y crAPI + Bot Defense opcional | [README](readme/README-sec-re-aws-todas-sin-nginx-apply.md) |
 | `sec-re-aws-todas-sin-ngix-destroy.yml`    | Destroy del caso 9: elimina XC, limpia specs, destruye VM y luego infra | [README](readme/README-sec-re-aws-todas-sin-nginx-apply.md) |
-| `sec-re-aws-todas-4lbs.yml`                | WAF global + 4 LBs en XC sobre una sola VM sin nginx + API Discovery/Protection para Arcadia y crAPI + Bot Defense opcional | [README](readme/README-sec-re-aws-todas-4lbs-apply.md) |
+| `sec-re-aws-todas-4lbs.yml`                | WAF global + 4 LBs en XC sobre una sola VM sin nginx + API Discovery para Arcadia + API Discovery/Protection para crAPI + Bot Defense opcional | [README](readme/README-sec-re-aws-todas-4lbs-apply.md) |
 | `sec-re-aws-todas-4lbs-destroy.yml`        | Destroy del caso 10: elimina XC, limpia specs, destruye VM y luego infra | [README](readme/README-sec-re-aws-todas-4lbs-apply.md) |
 
 ---

@@ -20,7 +20,7 @@ Validar en un mismo escenario:
 - disponibilidad publica por dominio
 - routing correcto por LB y por path
 - comportamiento funcional minimo de cada aplicacion
-- visibilidad de eventos WAF, API Discovery, API Protection y Bot Defense
+- visibilidad de eventos WAF, API Discovery, API Protection y Bot Defense donde apliquen
 - diagnostico rapido cuando falla una sola aplicacion dentro de la VM compartida
 
 ---
@@ -212,7 +212,7 @@ Que revisar en XC:
 
 ## 7. crAPI
 
-crAPI es el mejor punto para validar API Discovery y API Protection dentro del caso `4lbs`.
+En esta variante `4lbs`, crAPI queda con LB dedicado, **API Discovery** y **API Protection**. Arcadia mantiene **API Discovery** y Bot Defense, pero la validacion OpenAPI se concentra en crAPI para reducir consumo de cuota.
 
 ### 7.1. Acceso basico
 

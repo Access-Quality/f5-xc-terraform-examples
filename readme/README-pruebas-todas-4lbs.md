@@ -149,7 +149,7 @@ curl -i -X GET "http://${CRAPI_DOMAIN}/workshop/api/me" \
 Utilidad:
 
 - validar visibilidad de trafico API en el LB de crAPI
-- revisar eventos WAF, API Discovery o API Protection segun la configuracion
+- revisar eventos WAF, API Discovery o API Protection del LB de crAPI
 
 ### 5.3. Arcadia login
 
@@ -178,7 +178,7 @@ Verificaciones utiles:
 - estado de salud de cada origin pool
 - dominios asociados a cada LB
 - eventos WAF por dominio
-- endpoints descubiertos en crAPI y Arcadia
+- endpoints descubiertos en Arcadia y crAPI
 - si Mailhog aparece bajo el LB de crAPI
 
 ## 7. Diagnostico rapido

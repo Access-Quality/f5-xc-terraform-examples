@@ -158,15 +158,15 @@ El modulo `todas-4lbs/xc` crea los siguientes objetos principales:
 #### API Discovery
 
 - Se habilita con `XC_API_DISCOVERY=true`
-- Se aplica solo a Arcadia y crAPI
-- DVWA y Boutique quedan fuera para no consumir capacidad de validacion API donde no aporta valor real
+- Se aplica a Arcadia y crAPI en esta variante
+- Arcadia queda solo con descubrimiento; crAPI combina descubrimiento y proteccion
 
 #### API Protection
 
 - Se habilita con `XC_API_PROTECTION=true`
 - Solo se activa si existe al menos una spec cargada en XC
 - Opera en modo report
-- Se aplica solo a Arcadia y crAPI
+- Se aplica solo a crAPI en esta variante
 - El workflow aborta si `XC_API_PROTECTION=true` pero no se cargo ninguna spec
 
 #### Bot Defense
@@ -177,7 +177,13 @@ El modulo `todas-4lbs/xc` crea los siguientes objetos principales:
 
 ### Consideracion importante de limites en XC
 
-Algunos tenants de F5 XC tienen limites bajos para `http_loadbalancer.oas_validation`. Por eso este caso restringe API Discovery y API Protection a **Arcadia** y **crAPI**, que son las aplicaciones donde realmente se aprovechan esas capacidades. Si intentas adjuntar validacion OpenAPI a los cuatro LBs, puedes agotar cuota del tenant y recibir errores `429` durante el `terraform apply`.
+Algunos tenants de F5 XC tienen limites bajos para `http_loadbalancer.oas_validation`. Para reducir consumo en esta variante `4lbs`, la distribucion queda asi:
+
+- **Arcadia**: API Discovery
+- **crAPI**: API Discovery + API Protection
+- **DVWA** y **Boutique**: sin capacidades API
+
+Si aun asi el tenant devuelve `429`, significa que la cuota disponible para validacion OpenAPI sigue ocupada por otros HTTP Load Balancers ya existentes en XC.
 
 ## 6. Workflows involucrados
 
