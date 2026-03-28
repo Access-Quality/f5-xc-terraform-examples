@@ -238,8 +238,36 @@ curl -i "${ARC_BASE}/api/side_bar_table.php" \
 
 ### Resultado esperado
 
-- en `report`: deberia registrarse como endpoint no documentado
+- en `report`: deberia observarse como endpoint no documentado tras trafico repetido; puede aparecer primero en `Security Events` antes de verse en `API Discovery` como `Discovered` o `Shadow`
 - en `block`: la UI puede romperse porque ese endpoint participa en el flujo real
+
+Consejo practico:
+
+- una sola llamada con `curl` puede no bastar para que el endpoint aparezca de inmediato en la vista de inventario o discovery
+- si no lo ves, genera varias requests autenticadas o usa el flujo real del navegador y espera unos minutos antes de revisar la consola
+
+Prueba recomendada para forzar observacion en XC:
+
+```bash
+test -f "${ARC_COOKIE}" || {
+  echo "No existe ${ARC_COOKIE}. Ejecuta primero el login de la seccion 3.2." >&2
+  exit 1
+}
+
+for i in $(seq 1 20); do
+  curl -s "${ARC_BASE}/api/side_bar_table.php" \
+    -H "User-Agent: Mozilla/5.0" \
+    -H "Referer: ${ARC_BASE}/trading/index.php" \
+    -H "X-Requested-With: XMLHttpRequest" \
+    -b "${ARC_COOKIE}" > /dev/null
+done
+```
+
+Despues de lanzar ese bloque:
+
+- revisa primero `Security Events`
+- espera unos minutos antes de volver a consultar `API Discovery`
+- si sigue sin aparecer, repite la prueba navegando la UI real desde el browser
 
 ### Mitigacion recomendada
 

@@ -427,7 +427,26 @@ La UI de Arcadia tiene dos incompatibilidades con el swagger incluido:
 1. **Endpoint no documentado** — `/api/side_bar_table.php` carga la tabla de tarjetas/cuentas pero no está en el swagger. En modo block, esto provoca que el botón **Make Payment** no responda (spinner infinito).
 2. **Tipos de datos** — el swagger define `amount` y `account` como `integer`, pero el formulario HTML los envía como strings. En modo block, las transferencias desde el browser son rechazadas con 403.
 
-En modo **report**, F5 XC registra ambas violaciones en Security Events sin interrumpir el flujo de la aplicación. Esto permite demostrar la capacidad de detección y el valor del inventario de API sin romper el demo.
+En modo **report**, F5 XC registra ambas violaciones en Security Events sin interrumpir el flujo de la aplicación. El endpoint shadow puede no aparecer de inmediato en API Discovery tras una sola llamada manual, por lo que conviene generar trafico repetido o usar el flujo real del navegador y esperar unos minutos. Esto permite demostrar la capacidad de detección y el valor del inventario de API sin romper el demo.
+
+Bloque recomendado para generar trafico repetido sobre el endpoint shadow:
+
+```bash
+test -f /tmp/arcadia_cookies.txt || {
+  echo "No existe /tmp/arcadia_cookies.txt. Ejecuta primero el login con curl." >&2
+  exit 1
+}
+
+for i in $(seq 1 20); do
+  curl -s "http://arcadia.digitalvs.com/api/side_bar_table.php" \
+    -H "User-Agent: Mozilla/5.0" \
+    -H "Referer: http://arcadia.digitalvs.com/trading/index.php" \
+    -H "X-Requested-With: XMLHttpRequest" \
+    -b /tmp/arcadia_cookies.txt > /dev/null
+done
+```
+
+Despues de ejecutarlo, revisa primero `Security Events` y luego `API Discovery` pasados unos minutos.
 
 #### ¿Por qué Bot Defense está en modo flag?
 
@@ -537,7 +556,7 @@ curl -i "http://arcadia.digitalvs.com/" \
 | Credential stuffing | ⚑ Registrado por Bot Defense en Security Events (flag mode) |
 | BOLA / endpoint no documentado | ⚑ Registrado por API Protection (report mode) — no bloquea |
 | Schema validation (tipo de dato) | ⚑ Registrado por API Protection (report mode) — no bloquea |
-| Endpoint shadow (`side_bar_table.php`) | ⚑ Registrado por API Protection (report mode) — UI funciona |
+| Endpoint shadow (`side_bar_table.php`) | ⚑ Observable en Security Events y normalmente visible en Discovery tras trafico repetido (report mode) — UI funciona |
 | Login desde browser | ✅ Permitido — Bot Defense en flag, no bloquea token missing |
 
 Los eventos de bloqueo quedan registrados en F5 XC → **Security → Security Events** del namespace configurado en `XC_NAMESPACE`.
