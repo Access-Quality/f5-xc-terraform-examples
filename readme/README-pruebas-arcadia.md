@@ -215,6 +215,22 @@ Si `trading/rest/portfolio.php` responde bien en tu despliegue, puedes añadirlo
 - rutas frecuentes frente a rutas raras
 - posibles endpoints shadow o no documentados
 
+### 7.2. Que endpoint usar segun la demo
+
+Si quieres una demo mas predecible, usa cada endpoint segun el tipo de evidencia que quieres mostrar:
+
+| Objetivo | Endpoint recomendado | Que deberias ver en XC |
+| --- | --- | --- |
+| `Discovery` + `Shadow` | `POST /trading/auth.php` | normalmente aparece como ruta normalizada tipo `/trading/{DYN}.php` con origen `Traffic` |
+| `Inventory/OpenAPI` | `POST /api/rest/execute_money_transfer.php` | aparece en la tabla como endpoint del contrato OpenAPI |
+| `Requests` o `Security Events` sin garantia de discovery | `GET /api/side_bar_table.php` | puede verse en `Requests` y en evaluacion de API Protection, pero no necesariamente en `Discovery` |
+
+Recomendacion practica:
+
+- para demostrar `Discovery/Shadow`, usa `POST /trading/auth.php`
+- para demostrar enforcement contra la spec, usa `POST /api/rest/execute_money_transfer.php`
+- para demostrar observabilidad de una ruta fuera de spec, usa `GET /api/side_bar_table.php` y apóyate en `Requests` o `Security Events`
+
 ### Valor operativo
 
 API Discovery no bloquea por si solo. Su utilidad es:

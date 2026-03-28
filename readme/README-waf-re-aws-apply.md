@@ -393,6 +393,20 @@ Arcadia Finance expone una API REST y una interfaz web con los siguientes endpoi
 | `/api/side_bar_accounts.php`                  | GET    | ✅         | Lista de cuentas del usuario                                              |
 | `/api/side_bar_table.php`                     | GET    | ❌         | Tabla de tarjetas — **bloqueado por API Protection** (no está en swagger) |
 
+### Que endpoint usar segun la demo
+
+| Objetivo | Endpoint recomendado | Que deberias ver en XC |
+| --- | --- | --- |
+| `Discovery` + `Shadow` | `POST /trading/auth.php` | normalmente aparece como ruta normalizada tipo `/trading/{DYN}.php` con origen `Traffic` |
+| `Inventory/OpenAPI` | `POST /api/rest/execute_money_transfer.php` | aparece como endpoint del contrato cargado en la API Definition |
+| `Requests` o `Security Events` sin garantia de discovery | `GET /api/side_bar_table.php` | puede verse en `Requests` y en evaluacion de API Protection, pero no necesariamente en `Discovery` |
+
+Recomendacion practica:
+
+- para demostrar `Discovery/Shadow`, usa `POST /trading/auth.php`
+- para demostrar enforcement contra la spec, usa `POST /api/rest/execute_money_transfer.php`
+- para demostrar observabilidad fuera de spec, usa `GET /api/side_bar_table.php` y apóyate en `Requests` o `Security Events`
+
 ### Acceso directo a la aplicación (sin pasar por F5 XC)
 
 El Security Group del EC2 tiene el puerto `8080` abierto a `0.0.0.0/0`. Esto permite acceder a Arcadia Finance directamente usando la Elastic IP de la instancia, **sin pasar por el RE de F5 XC ni por la WAF**:
