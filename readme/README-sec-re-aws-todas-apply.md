@@ -1,5 +1,7 @@
 # Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS - Deploy
 
+**Tiempo estimado de implementacion:** 12m 30s
+
 Este workflow despliega una solucion de **seguridad en el Regional Edge (RE) de F5 Distributed Cloud** para **cuatro aplicaciones principales alojadas en una sola instancia EC2 de AWS**:
 
 - **Arcadia Finance**, publicada por `ARCADIA_DOMAIN`
