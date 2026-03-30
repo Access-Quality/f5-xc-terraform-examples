@@ -169,8 +169,8 @@ La mitigación principal aquí es **rate limiting**, no JS challenge.
 
 Controles recomendados:
 
-- rate limiting sobre `GET /vulnerabilities/brute/`
-- rate limiting adicional sobre `/login.php`
+- rate limiting sobre `GET /vulnerabilities/brute/`; cuando F5 alcance el umbral configurado, esa acción quedará bloqueada por el propio enforcement del rate limiting aunque el WAF o la política general no estén en `blocking`
+- si también quieres proteger la autenticación inicial de DVWA, puedes añadir rate limiting sobre `/login.php`, pero las pruebas de este módulo y el abuso principal del laboratorio ocurren sobre `/vulnerabilities/brute/`
 - Bot Defense si quieres etiquetar o frenar automatización genérica
 - alertas por tasa anormal por IP, ASN o fingerprint
 
@@ -178,7 +178,7 @@ Controles recomendados:
 
 - usar `report` al inicio para medir el umbral real
 - después activar limitación por ventana de tiempo
-- si la demo lo requiere, bloquear solo cuando se supere un número muy claro de intentos por minuto
+- definir un umbral muy claro de intentos por minuto, porque al superarlo F5 aplicará el bloqueo del rate limiting aunque la acción general siga sin pasar a `blocking`
 
 ### Mitigación en la aplicación
 
@@ -692,8 +692,8 @@ Para este laboratorio, la estrategia más útil suele ser:
    - command injection
    - file inclusion
 6. añadir rate limiting para:
-   - `/login.php`
    - `/vulnerabilities/brute/`
+  - opcionalmente `/login.php` si también quieres proteger el acceso inicial a DVWA, separado de la prueba didáctica de brute force
 7. evaluar Bot Defense en:
    - login principal
    - paths con repetición clara de requests
