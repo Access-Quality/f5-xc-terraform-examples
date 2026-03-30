@@ -120,6 +120,29 @@ Para cada módulo de DVWA usa la misma secuencia:
 5. comprobar si el tráfico queda bloqueado, marcado o limitado
 6. documentar el path, método, parámetro y señal observada
 
+### 5.1. Cómo pasar de la GUI a CLI y cómo mirar F5 XC
+
+Para casi todos los módulos de DVWA conviene usar este patrón:
+
+1. reproducir la acción en la GUI de DVWA para entender el flujo normal
+2. abrir las herramientas del navegador en `Network`
+3. localizar el request exacto que genera el módulo
+4. usar `Copy as cURL` o replicar a mano el mismo método, path, parámetros y cookie de sesión
+5. lanzar varias repeticiones por CLI para que el patrón quede más claro en F5 XC
+
+En F5 XC, durante cada prueba, revisa al menos:
+
+- el HTTP Load Balancer que publica DVWA
+- los eventos de seguridad o analytics asociados al path probado
+- el path, método, código de respuesta y acción aplicada
+- la IP origen, la tasa de requests y el parámetro que disparó la detección
+- si el tráfico quedó `reported`, `blocked`, `rate limited` o simplemente `allowed`
+
+Regla práctica:
+
+- si el ataque viaja en query string, body, headers o cookies, suele dejar evidencia clara en WAF o analytics L7
+- si el problema vive sobre todo en el navegador, como DOM XSS, F5 XC solo verá la parte del flujo que realmente salga por la red
+
 ---
 
 ## 6. Módulos y pruebas de seguridad
@@ -132,19 +155,21 @@ Ruta principal:
 /vulnerabilities/brute/
 ```
 
-### Qué valida
+### Qué hace el ataque
 
-- intentos repetitivos de autenticación
-- abuso por volumen sobre credenciales
-- protección del path más didáctico para login guessing en DVWA
+Este módulo simula un login vulnerable a adivinación repetitiva de credenciales. El objetivo del atacante no es romper la aplicación con un payload extraño, sino probar muchos usuarios o contraseñas hasta acertar.
 
-### Cómo probarlo
+### Cómo reproducirlo desde la GUI
 
-1. entrar al módulo `Brute Force`
+1. entrar en `Brute Force`
 2. dejar DVWA en `Low`
-3. lanzar múltiples intentos cambiando `password`
+3. escribir `admin` como usuario
+4. probar varias contraseñas seguidas desde el mismo navegador
+5. observar si la aplicación responde siempre igual o si termina aceptando una credencial válida
 
-Ejemplo de prueba controlada:
+### Cómo reproducirlo con comandos
+
+Este módulo sí se presta bien a CLI porque el flujo vulnerable ocurre en `GET /vulnerabilities/brute/`.
 
 ```bash
 for p in admin password 123456 letmein dvwa qwerty; do
@@ -162,6 +187,13 @@ done
 - respuestas repetidas desde la misma IP o sesión
 - patrón claro de automatización
 - posible éxito si usas credenciales válidas del laboratorio
+
+### Cómo verlo en F5 XC
+
+- buscar el path `/vulnerabilities/brute/`
+- comprobar múltiples requests desde la misma IP, cookie o fingerprint en una ventana corta
+- validar si aparece acción de `rate limited` o bloqueo al superar el umbral
+- revisar si Bot Defense o analytics clasifican el patrón como automatización
 
 ### Mitigación recomendada con F5 DCS
 
@@ -198,12 +230,19 @@ Ruta principal:
 /vulnerabilities/sqli/
 ```
 
-### Qué valida
+### Qué hace el ataque
 
-- inyección de payloads en parámetros de consulta
-- detección de firmas SQLi por el WAF
+La inyección SQL busca alterar la consulta que la aplicación envía a la base de datos. En vez de tratar el valor de entrada como dato, la app lo concatena como parte de la lógica SQL.
 
-### Cómo probarlo
+### Cómo reproducirlo desde la GUI
+
+1. abrir `SQL Injection`
+2. dejar DVWA en `Low`
+3. enviar un valor simple como `1` para ver la respuesta normal
+4. repetir con un payload como `' or '1'='1`
+5. comparar si la respuesta devuelve más registros o un comportamiento anómalo
+
+### Cómo reproducirlo con comandos
 
 Para payloads en query string, evita escribir la URL completa con espacios o comillas sin codificar. En DVWA es mas robusto usar `curl -G` con `--data-urlencode`.
 
@@ -221,6 +260,13 @@ curl -i -G "http://DVWA_DOMAIN/vulnerabilities/sqli/" \
 - respuesta anómala con más de un registro
 - errores de SQL o resultados no esperados
 - evento de WAF marcando SQL Injection si está en report o bloqueo
+
+### Cómo verlo en F5 XC
+
+- filtrar por el path `/vulnerabilities/sqli/`
+- revisar qué parámetro disparó la firma, normalmente `id`
+- confirmar si el evento quedó en `report` o `blocked`
+- anotar la firma o familia de firmas de SQLi y el valor recibido
 
 ### Mitigación recomendada con F5 DCS
 
@@ -251,12 +297,18 @@ Ruta principal:
 /vulnerabilities/sqli_blind/
 ```
 
-### Qué valida
+### Qué hace el ataque
 
-- inyección basada en diferencias de tiempo o respuesta indirecta
-- capacidad del WAF para detectar patrones SQLi menos evidentes
+La SQLi blind no siempre devuelve errores o resultados visibles. En su lugar, el atacante infiere información porque la aplicación tarda más, responde distinto o cambia el contenido de manera sutil.
 
-### Cómo probarlo
+### Cómo reproducirlo desde la GUI
+
+1. abrir `SQL Injection (Blind)`
+2. enviar primero un valor inocuo para medir el comportamiento normal
+3. repetir con un payload basado en tiempo o condición booleana
+4. observar si la página tarda más o cambia la respuesta de verdadero a falso
+
+### Cómo reproducirlo con comandos
 
 Ejemplo de prueba controlada:
 
@@ -271,6 +323,13 @@ curl -i -G "http://DVWA_DOMAIN/vulnerabilities/sqli_blind/" \
 
 - incremento de latencia o comportamiento binario verdadero/falso
 - alertas de SQLi en F5 DCS si la firma detecta el patrón
+
+### Cómo verlo en F5 XC
+
+- buscar el path `/vulnerabilities/sqli_blind/`
+- comparar tiempos de respuesta entre requests normales y maliciosos
+- revisar si varias pruebas consecutivas muestran patrón de enumeración
+- validar si el WAF detecta SQLi aun cuando la respuesta funcional no sea evidente
 
 ### Mitigación recomendada con F5 DCS
 
@@ -294,12 +353,18 @@ Ruta principal:
 /vulnerabilities/xss_r/
 ```
 
-### Qué valida
+### Qué hace el ataque
 
-- payloads reflejados desde query string o form input
-- capacidad del WAF para detectar `<script>`, handlers inline y vectores equivalentes
+El XSS reflejado devuelve al navegador el mismo payload enviado por el usuario. Si la aplicación lo inserta sin escapar, el navegador lo interpreta como HTML o JavaScript activo.
 
-### Cómo probarlo
+### Cómo reproducirlo desde la GUI
+
+1. abrir `Reflected XSS`
+2. enviar un nombre benigno para ver la respuesta normal
+3. repetir con un payload simple como `<script>alert(1)</script>`
+4. validar si el valor aparece reflejado en la respuesta o si el navegador ejecuta el script
+
+### Cómo reproducirlo con comandos
 
 Ejemplo controlado:
 
@@ -308,6 +373,13 @@ curl -i -G "http://DVWA_DOMAIN/vulnerabilities/xss_r/" \
   --data-urlencode "name=<script>alert(1)</script>" \
   -H "Cookie: PHPSESSID=<SESSION>; security=low"
 ```
+
+### Cómo verlo en F5 XC
+
+- filtrar por `/vulnerabilities/xss_r/`
+- revisar el parámetro `name` u otro campo de entrada
+- confirmar si el WAF marcó la request por firmas XSS o patrones de script inline
+- comparar una request normal y otra maliciosa para ver la diferencia en acción aplicada
 
 ### Mitigación recomendada con F5 DCS
 
@@ -330,20 +402,38 @@ Ruta principal:
 /vulnerabilities/xss_s/
 ```
 
-### Qué valida
+### Qué hace el ataque
 
-- payload persistente guardado en servidor y renderizado luego a otro usuario
+El XSS almacenado persiste en backend. El atacante envía un payload una sola vez y después cualquier usuario que visite la página afectada puede recibir ese contenido malicioso.
 
-### Cómo probarlo
+### Cómo reproducirlo desde la GUI
 
-1. enviar un comentario o campo persistente con payload simple
-2. recargar la página y confirmar persistencia
+1. abrir `Stored XSS`
+2. escribir un nombre o mensaje inocuo para ver el flujo normal
+3. repetir con un payload simple en el campo persistente
+4. guardar el contenido y recargar la página
+5. verificar si el payload queda almacenado y se vuelve a renderizar
 
-Prueba controlada típica:
+### Cómo reproducirlo con comandos
 
-```text
-<script>alert(1)</script>
+Ejemplo orientativo para el guestbook de DVWA:
+
+```bash
+curl -i -X POST "http://DVWA_DOMAIN/vulnerabilities/xss_s/" \
+  -H "Cookie: PHPSESSID=<SESSION>; security=low" \
+  --data-urlencode "txtName=tester" \
+  --data-urlencode "mtxMessage=<script>alert(1)</script>" \
+  --data-urlencode "btnSign=Sign Guestbook"
 ```
+
+Después de enviar el payload, vuelve a cargar la página desde navegador para confirmar si quedó persistido.
+
+### Cómo verlo en F5 XC
+
+- revisar el request de entrada que sube el contenido al path `/vulnerabilities/xss_s/`
+- comprobar si el WAF detecta la carga maliciosa antes de que quede almacenada
+- distinguir entre el request de inserción y el posterior renderizado desde backend
+- recordar que F5 XC puede bloquear la entrada, pero no limpiar datos ya guardados en DVWA
 
 ### Mitigación recomendada con F5 DCS
 
@@ -371,13 +461,33 @@ Ruta principal:
 /vulnerabilities/xss_d/
 ```
 
-### Qué valida
+### Qué hace el ataque
 
-- manipulación client-side del DOM a partir de fragmentos o parámetros
+El DOM XSS ocurre cuando el propio JavaScript del navegador toma datos de la URL, del fragmento o de otro origen client-side y los inserta de forma insegura en el DOM. Aquí el problema principal puede existir aunque el backend no vea el payload completo.
 
-### Cómo probarlo
+### Cómo reproducirlo desde la GUI
 
-Usa payloads que modifiquen la lógica del navegador en la URL o fragmento. En este módulo la explotación depende más del JavaScript del cliente que del request puro al backend.
+1. abrir `DOM XSS`
+2. localizar el parámetro o fragmento de URL que la página usa para mostrar contenido
+3. insertar un payload simple en ese valor
+4. recargar o volver a renderizar la vista
+5. comprobar si el navegador modifica el DOM o ejecuta código
+
+### Cómo reproducirlo con comandos
+
+Este caso no suele reproducirse bien con `curl` porque el fragmento `#...` nunca se envía al servidor y parte de la lógica vive solo en el navegador. La forma más práctica es construir la URL maliciosa y abrirla en un navegador real.
+
+Ejemplo orientativo:
+
+```text
+http://DVWA_DOMAIN/vulnerabilities/xss_d/#<script>alert(1)</script>
+```
+
+### Cómo verlo en F5 XC
+
+- comprobar si el payload realmente viajó en query string o body; si solo va en el fragmento, F5 XC no lo verá
+- revisar únicamente la parte de red observable por el LB
+- usar DevTools del navegador junto con F5 XC para separar qué ocurrió en cliente y qué salió realmente por la red
 
 ### Mitigación recomendada con F5 DCS
 
@@ -400,11 +510,18 @@ Ruta principal:
 /vulnerabilities/exec/
 ```
 
-### Qué valida
+### Qué hace el ataque
 
-- concatenación insegura de input en comandos del sistema
+La inyección de comandos aparece cuando la aplicación concatena input del usuario dentro de un comando del sistema operativo. El atacante intenta romper el comando esperado y encadenar otro adicional.
 
-### Cómo probarlo
+### Cómo reproducirlo desde la GUI
+
+1. abrir `Command Injection`
+2. enviar una IP válida para observar la respuesta normal
+3. repetir con un separador de shell y un comando adicional, por ejemplo `;id`
+4. revisar si la salida incluye información que no corresponde a un simple ping
+
+### Cómo reproducirlo con comandos
 
 Prueba controlada con separación de comandos:
 
@@ -417,6 +534,13 @@ curl -i "http://DVWA_DOMAIN/vulnerabilities/exec/?ip=127.0.0.1;id&Submit=Submit"
 
 - ejecución no prevista del comando adicional
 - respuesta anómala o salida del sistema
+
+### Cómo verlo en F5 XC
+
+- filtrar por `/vulnerabilities/exec/`
+- revisar el parámetro `ip` u otro campo del formulario
+- buscar firmas o señales ligadas a separadores de shell, metacaracteres o comandos del sistema
+- confirmar si la acción pasó de `report` a `blocked` al endurecer el WAF
 
 ### Mitigación recomendada con F5 DCS
 
@@ -440,12 +564,19 @@ Ruta principal:
 /vulnerabilities/fi/
 ```
 
-### Qué valida
+### Qué hace el ataque
 
-- LFI/RFI
-- path traversal
+La inclusión de archivos intenta forzar a la aplicación a cargar recursos no previstos. Puede buscar archivos locales sensibles, rutas relativas o referencias remotas, según cómo esté implementado el módulo.
 
-### Cómo probarlo
+### Cómo reproducirlo desde la GUI
+
+1. abrir `File Inclusion`
+2. identificar el parámetro que selecciona la página o recurso
+3. probar primero un valor legítimo
+4. repetir con una ruta relativa como `../../../../etc/passwd`
+5. verificar si la respuesta devuelve contenido del sistema o un error anómalo
+
+### Cómo reproducirlo con comandos
 
 Pruebas controladas típicas:
 
@@ -453,6 +584,13 @@ Pruebas controladas típicas:
 curl -i "http://DVWA_DOMAIN/vulnerabilities/fi/?page=../../../../etc/passwd" \
   -H "Cookie: PHPSESSID=<SESSION>; security=low"
 ```
+
+### Cómo verlo en F5 XC
+
+- buscar el path `/vulnerabilities/fi/`
+- revisar el parámetro `page` o equivalente
+- detectar patrones de path traversal como `../`, rutas absolutas o wrappers sospechosos
+- observar si la normalización de rutas y las firmas del WAF disparan evento
 
 ### Mitigación recomendada con F5 DCS
 
@@ -476,22 +614,37 @@ Ruta principal:
 /vulnerabilities/upload/
 ```
 
-### Qué valida
+### Qué hace el ataque
 
-- subida de ficheros peligrosos o ejecutables
-- validación de tamaño, nombre, tipo y contenido
+El riesgo del upload inseguro es que la aplicación acepte archivos peligrosos, demasiado grandes o disfrazados. El atacante intenta colar un archivo ejecutable o un contenido que luego pueda procesarse de forma insegura.
 
-### Cómo probarlo
+### Cómo reproducirlo desde la GUI
 
-1. preparar un archivo de prueba del laboratorio
-2. intentar subir un tipo no permitido
-3. probar extensiones dobles o content-type engañoso
+1. abrir `File Upload`
+2. subir primero un archivo inocuo para entender el flujo permitido
+3. repetir con un tipo no esperado por la aplicación
+4. probar doble extensión, nombre sospechoso o `content-type` inconsistente
+5. verificar si el sistema acepta el archivo o lo deja accesible después
 
-Ejemplo de enfoque:
+### Cómo reproducirlo con comandos
 
-- archivo con extensión inesperada
-- `multipart/form-data` alterado
-- tamaño superior al esperado
+Ejemplo orientativo con `multipart/form-data`:
+
+```bash
+curl -i -X POST "http://DVWA_DOMAIN/vulnerabilities/upload/" \
+  -H "Cookie: PHPSESSID=<SESSION>; security=low" \
+  -F "uploaded=@./archivo-lab.txt;type=text/plain" \
+  -F "Upload=Upload"
+```
+
+Para una prueba más realista, repite la carga cambiando extensión, nombre o `content-type`.
+
+### Cómo verlo en F5 XC
+
+- filtrar por `/vulnerabilities/upload/`
+- revisar método `POST`, tamaño de request y tipo de contenido `multipart/form-data`
+- validar si hay eventos por tamaño anómalo, tipo peligroso o firmas de payload malicioso
+- comprobar si la política aplicó bloqueo, solo reporte o límites de tamaño
 
 ### Mitigación recomendada con F5 DCS
 
@@ -517,14 +670,36 @@ Ruta principal:
 /vulnerabilities/csrf/
 ```
 
-### Qué valida
+### Qué hace el ataque
 
-- acciones sensibles que pueden dispararse sin intención del usuario autenticado
+CSRF aprovecha la sesión ya abierta de la víctima. El atacante no necesita robar la cookie; le basta con inducir al navegador autenticado a enviar una acción válida que la aplicación acepte sin un token o control adicional.
 
-### Cómo probarlo
+### Cómo reproducirlo desde la GUI
 
-1. identificar una acción sensible del módulo
-2. replicarla desde un request forjado sin controles adicionales
+1. iniciar sesión en DVWA con una sesión válida
+2. abrir `CSRF` y observar qué acción sensible ejecuta el formulario
+3. cambiar un valor legítimo desde la propia GUI para identificar el request normal
+4. construir una página o enlace externo que dispare la misma acción sin interacción consciente del usuario
+5. visitar esa página con la sesión aún abierta y comprobar si el cambio se aplica
+
+### Cómo reproducirlo con comandos
+
+Ejemplo orientativo para un cambio directo de contraseña en `Low`:
+
+```bash
+curl -i -G "http://DVWA_DOMAIN/vulnerabilities/csrf/" \
+  --data-urlencode "password_new=LabPass123!" \
+  --data-urlencode "password_conf=LabPass123!" \
+  --data-urlencode "Change=Change" \
+  -H "Cookie: PHPSESSID=<SESSION>; security=low"
+```
+
+### Cómo verlo en F5 XC
+
+- buscar el path `/vulnerabilities/csrf/`
+- revisar si la acción sensible llega como request aparentemente legítimo desde una sesión ya autenticada
+- comprobar `Referer`, `Origin`, método y repetición del flujo
+- recordar que F5 XC puede dar contexto y controles compensatorios, pero no sustituye tokens CSRF del lado de la aplicación
 
 ### Mitigación con F5 DCS
 
@@ -553,14 +728,35 @@ Ruta principal:
 /vulnerabilities/captcha/
 ```
 
-### Qué valida
+### Qué hace el ataque
 
-- debilidad de mecanismos anti-bot triviales
+Este módulo demuestra que un CAPTCHA débil o mal integrado no frena realmente la automatización. El atacante intenta repetir el flujo, reutilizar valores o saltarse pasos sin resolver un desafío robusto.
 
-### Cómo probarlo
+### Cómo reproducirlo desde la GUI
 
-- automatizar requests repetidos contra el flujo del módulo
-- comprobar si el CAPTCHA puede eludirse con secuencias simples o replay
+1. abrir `Insecure CAPTCHA`
+2. completar el flujo una vez de forma normal para entender qué campos usa
+3. repetir el proceso varias veces observando si el reto cambia de verdad o si puede reutilizarse
+4. probar si el flujo puede completarse con pasos mínimos o repeticiones mecánicas
+
+### Cómo reproducirlo con comandos
+
+Aquí suele ser más fiable capturar el request exacto desde `Network` y repetirlo con `curl`. Lo importante no es un payload concreto, sino verificar si el flujo acepta automatización simple o replay con la misma sesión.
+
+Patrón orientativo:
+
+```bash
+curl -i -X POST "http://DVWA_DOMAIN/vulnerabilities/captcha/" \
+  -H "Cookie: PHPSESSID=<SESSION>; security=low" \
+  -d "<PARAMETROS_CAPTURADOS_DESDE_LA_GUI>"
+```
+
+### Cómo verlo en F5 XC
+
+- revisar repetición de requests sobre `/vulnerabilities/captcha/`
+- observar si el patrón es claramente automatizable por IP o fingerprint
+- comprobar si Bot Defense o rate limiting ayudan a frenar el flujo
+- comparar un uso humano aislado contra una secuencia rápida y repetitiva
 
 ### Mitigación recomendada con F5 DCS
 
@@ -584,15 +780,36 @@ Ruta principal:
 /vulnerabilities/weak_id/
 ```
 
-### Qué valida
+### Qué hace el ataque
 
-- predictibilidad de identificadores de sesión
-- mala aleatoriedad o secuencia fácil de inferir
+El problema aquí no es un payload en request, sino la previsibilidad del identificador. Si los IDs de sesión o del módulo siguen una secuencia fácil, un atacante puede intentar inferir los siguientes valores.
 
-### Cómo probarlo
+### Cómo reproducirlo desde la GUI
 
-- observar varios IDs generados
-- analizar si son secuenciales o predecibles
+1. abrir `Weak Session IDs`
+2. generar varios IDs o refrescar la función que los crea
+3. apuntar los valores en orden
+4. comprobar si siguen una secuencia incremental o un patrón reconocible
+
+### Cómo reproducirlo con comandos
+
+Puedes repetir el acceso varias veces y extraer el valor que devuelve la página:
+
+```bash
+for i in $(seq 1 10); do
+  curl -s "http://DVWA_DOMAIN/vulnerabilities/weak_id/" \
+    -H "Cookie: PHPSESSID=<SESSION>; security=low" \
+    | grep -i "id"
+done
+```
+
+Si la respuesta HTML cambia mucho, usa la GUI y DevTools para identificar exactamente qué valor debes observar.
+
+### Cómo verlo en F5 XC
+
+- F5 XC no corregirá la debilidad del generador de IDs
+- sí puedes revisar repetición de accesos al módulo, IPs de origen y patrones de enumeración
+- si el atacante prueba muchos IDs o automatiza accesos, analytics y controles L7 pueden mostrar el abuso secundario
 
 ### Mitigación con F5 DCS
 
@@ -619,14 +836,34 @@ Ruta principal:
 /vulnerabilities/open_redirect/
 ```
 
-### Qué valida
+### Qué hace el ataque
 
-- redirección del usuario a dominios controlados por atacante
+El open redirect toma un parámetro de destino y redirige al usuario sin validarlo bien. El riesgo no es solo la redirección, sino facilitar phishing, encadenar ataques o saltar controles de confianza.
 
-### Cómo probarlo
+### Cómo reproducirlo desde la GUI
 
-- localizar el parámetro de destino
-- probar una URL externa controlada para el laboratorio
+1. abrir `Open Redirect`
+2. identificar qué campo o parámetro define el destino
+3. probar primero una ruta interna legítima
+4. repetir con una URL externa del laboratorio
+5. validar si DVWA redirige fuera del dominio esperado
+
+### Cómo reproducirlo con comandos
+
+Como el nombre del parámetro puede variar según la versión del módulo, lo más fiable es capturarlo en la GUI y repetirlo por CLI. Patrón orientativo:
+
+```bash
+curl -i -L "http://DVWA_DOMAIN/vulnerabilities/open_redirect/?<PARAM_DESTINO>=https://example.org"
+```
+
+Sustituye `<PARAM_DESTINO>` por el nombre real visto en `Network` o en el propio enlace generado por DVWA.
+
+### Cómo verlo en F5 XC
+
+- buscar el path `/vulnerabilities/open_redirect/`
+- revisar el parámetro de destino y si contiene `http://` o `https://` externos
+- validar si existen reglas por allowlist o bloqueo de dominios no permitidos
+- correlacionar el evento con la respuesta `3xx` del backend o de la política
 
 ### Mitigación recomendada con F5 DCS
 
@@ -644,6 +881,27 @@ Ruta principal:
 ## 6.14. JavaScript y módulos cliente
 
 DVWA incluye módulos o retos donde la validación ocurre en navegador o lógica cliente.
+
+### Qué hace este tipo de problema
+
+Aquí la vulnerabilidad vive principalmente en JavaScript del lado del cliente. El navegador toma datos, decide el flujo o actualiza el DOM sin suficientes controles, por lo que el backend puede ver muy poco del problema real.
+
+### Cómo reproducirlo desde la GUI
+
+1. abrir el módulo cliente correspondiente
+2. usar DevTools para inspeccionar la URL, el DOM y el JavaScript
+3. modificar parámetros, fragmentos o valores en formularios
+4. comprobar si la lógica insegura ocurre sin que el servidor tenga contexto suficiente
+
+### Cómo reproducirlo con comandos
+
+Por CLI suele haber poca visibilidad útil porque `curl` no ejecuta JavaScript ni refleja cambios del DOM. Úsalo solo para verificar qué requests salen al backend; para el comportamiento vulnerable real, la GUI del navegador es la referencia principal.
+
+### Cómo verlo en F5 XC
+
+- revisar únicamente los requests que sí llegan al HTTP Load Balancer
+- correlacionar esos eventos con lo que ves en DevTools del navegador
+- asumir que F5 XC no observará fragmentos de URL ni manipulación DOM puramente local
 
 ### Mitigación con F5 DCS
 
@@ -692,7 +950,7 @@ Para este laboratorio, la estrategia más útil suele ser:
    - command injection
    - file inclusion
 6. añadir rate limiting para:
-   - `/vulnerabilities/brute/`
+  - `/vulnerabilities/brute/`
   - opcionalmente `/login.php` si también quieres proteger el acceso inicial a DVWA, separado de la prueba didáctica de brute force
 7. evaluar Bot Defense en:
    - login principal
