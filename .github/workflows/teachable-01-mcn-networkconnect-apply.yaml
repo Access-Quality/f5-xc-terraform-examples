@@ -166,6 +166,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          repository: f5devcentral/f5-xc-terraform-examples
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -258,6 +260,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          repository: f5devcentral/f5-xc-terraform-examples
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -380,6 +384,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          repository: f5devcentral/f5-xc-terraform-examples
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
