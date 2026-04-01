@@ -97,10 +97,6 @@ jobs:
         id: init
         run: terraform init
 
-      - name: Normalize AWS VPC Site module
-        run: |
-          perl -0pi -e 's/performance_enhancement_mode \{\n\s*perf_mode_l7_enhanced = \(null == var\.jumbo\)\n\n\s*dynamic "perf_mode_l3_enhanced" \{\n\s*for_each = \(null != var\.jumbo\) \? \[0\] : \[\]\n\s*content \{\n\s*jumbo\s*= \(true == var\.jumbo\) \? true : null\n\s*no_jumbo = \(false == var\.jumbo\) \? true : null\n\s*\}\n\s*\}\n\s*\}/dynamic "performance_enhancement_mode" {\n        for_each = \(null != var.jumbo\) ? [0] : []\n        content {\n          dynamic "perf_mode_l3_enhanced" {\n            for_each = [0]\n            content {\n              jumbo    = (true == var.jumbo) ? true : null\n              no_jumbo = (false == var.jumbo) ? true : null\n            }\n          }\n        }\n      }/g' .terraform/modules/aws_vpc_site/main.tf
-
       - name: Terraform Destroy
         id: destroy
         run: terraform destroy -auto-approve -input=false
