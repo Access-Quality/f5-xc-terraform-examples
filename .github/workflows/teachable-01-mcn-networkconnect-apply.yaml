@@ -193,6 +193,10 @@ jobs:
         id: init
         run: terraform init
 
+      - name: Patch AWS VPC Site module
+        run: |
+          perl -0pi -e 's/perf_mode_l7_enhanced = \(null == var\.jumbo\)/dynamic "perf_mode_l7_enhanced" {\n          for_each = \(null == var.jumbo\) ? [0] : []\n          content {\n            jumbo_enabled = true\n          }\n        }/g' .terraform/modules/aws_vpc_site/main.tf
+
       - name: Terraform Validate
         id: validate
         run: terraform validate -no-color
@@ -281,6 +285,10 @@ jobs:
       - name: Terraform Init
         id: init
         run: terraform init
+
+      - name: Patch AWS VPC Site module
+        run: |
+          perl -0pi -e 's/perf_mode_l7_enhanced = \(null == var\.jumbo\)/dynamic "perf_mode_l7_enhanced" {\n          for_each = \(null == var.jumbo\) ? [0] : []\n          content {\n            jumbo_enabled = true\n          }\n        }/g' .terraform/modules/aws_vpc_site/main.tf
 
       - name: Terraform Validate
         id: validate
@@ -406,6 +414,10 @@ jobs:
       - name: Terraform Init
         id: init
         run: terraform init
+
+      - name: Patch AWS VPC Site module
+        run: |
+          perl -0pi -e 's/perf_mode_l7_enhanced = \(null == var\.jumbo\)/dynamic "perf_mode_l7_enhanced" {\n          for_each = \(null == var.jumbo\) ? [0] : []\n          content {\n            jumbo_enabled = true\n          }\n        }/g' .terraform/modules/aws_vpc_site/main.tf
 
       - name: Terraform Validate
         id: validate
