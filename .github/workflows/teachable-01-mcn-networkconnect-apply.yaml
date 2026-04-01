@@ -617,7 +617,7 @@ jobs:
       TF_VAR_ssh_key: ""
       TF_VAR_azure_rg_location: ${{ needs.apply_variables.outputs.TF_VAR_azure_location }}
       TF_VAR_azure_rg_name: ${{ needs.apply_variables.outputs.TF_VAR_azure_vnet_site_name }}
-      TF_VAR_machine_type: "Standard_D4s_v3"
+      TF_VAR_machine_type: "Standard_D4s_v4"
       TF_VAR_az_cloud_credentials_name: ${{ needs.azure_credentials.outputs.azure_credentials_name }}
       TF_VAR_az_cloud_credentials_namespace: ""
       TF_VAR_az_cloud_credentials_tenant: ""
@@ -855,7 +855,7 @@ jobs:
       TF_VAR_ssh_key: ""
       TF_VAR_azure_rg_location: ${{ needs.apply_variables.outputs.TF_VAR_azure_location }}
       TF_VAR_azure_rg_name: ${{ needs.apply_variables.outputs.TF_VAR_azure_vnet_site_name }}
-      TF_VAR_machine_type: "Standard_D4s_v3"
+      TF_VAR_machine_type: "Standard_D4s_v4"
       TF_VAR_az_cloud_credentials_name: ${{ needs.azure_credentials.outputs.azure_credentials_name }}
       TF_VAR_az_cloud_credentials_namespace: ""
       TF_VAR_az_cloud_credentials_tenant: ""
