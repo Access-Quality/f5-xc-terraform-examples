@@ -41,12 +41,12 @@ jobs:
       run:
         working-directory: "./teachable/01-mcn-networkconnect"
     env:
-      TF_CLOUD_WORKSPACE_AWS_CREDENTIALS: "aws-cloud-credentials"
-      TF_CLOUD_WORKSPACE_AWS_NETWORKING: "aws-networking"
-      TF_CLOUD_WORKSPACE_AWS_VPC_SITE: "aws-vpc-site"
-      TF_CLOUD_WORKSPACE_AZURE_NETWORKING: "azure-networking"
-      TF_CLOUD_WORKSPACE_AZURE_CREDENTIALS: "azure-cloud-credentials"
-      TF_CLOUD_WORKSPACE_AZURE_VNET_SITE: "azure-vnet-site"
+      TF_CLOUD_WORKSPACE_AWS_CREDENTIALS: ""
+      TF_CLOUD_WORKSPACE_AWS_NETWORKING: ""
+      TF_CLOUD_WORKSPACE_AWS_VPC_SITE: ""
+      TF_CLOUD_WORKSPACE_AZURE_NETWORKING: ""
+      TF_CLOUD_WORKSPACE_AZURE_CREDENTIALS: ""
+      TF_CLOUD_WORKSPACE_AZURE_VNET_SITE: ""
       TF_CLOUD_WORKSPACE_TEACHABLE_MCN: "teachable-01-mcn"
       TF_CLOUD_WORKSPACE_TEACHABLE_MCN_FW: "teachable-01-mcn-fw"
     outputs:
