@@ -443,12 +443,15 @@ jobs:
       - name: Terraform Apply
         run: |
           for attempt in {1..5}; do
+            terraform state rm 'module.azure_vnet_site.time_sleep.wait_for_site_nics' 2>/dev/null || true
+            terraform state rm 'module.azure_vnet_site.volterra_tf_params_action.action_apply' 2>/dev/null || true
+            terraform state rm 'module.azure_vnet_site.time_sleep.wait_30_seconds' 2>/dev/null || true
             terraform apply -no-color -auto-approve -input=false && break
             if [[ "$attempt" -eq 5 ]]; then
               echo "terraform apply failed after 5 attempts"
               exit 1
             fi
-            echo "terraform apply failed (attempt $attempt/5) - Azure NICs may not be ready yet. Retrying in 60s..."
+            echo "terraform apply failed (attempt $attempt/5) - XC apply will be retriggered. Retrying in 60s..."
             sleep 60
           done
 
