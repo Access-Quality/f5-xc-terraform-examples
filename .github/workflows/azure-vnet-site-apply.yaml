@@ -442,11 +442,60 @@ jobs:
 
       - name: Terraform Apply
         run: |
+          set -o pipefail
+
+          resource_address='module.azure_vnet_site.volterra_azure_vnet_site.this'
+          site_namespace="${TF_VAR_site_namespace:-system}"
+          if [[ -z "$site_namespace" ]]; then
+            site_namespace="system"
+          fi
+
+          try_import_existing_site() {
+            local candidate
+
+            if terraform state show "$resource_address" >/dev/null 2>&1; then
+              echo "Azure VNET Site resource is already present in Terraform state"
+              return 0
+            fi
+
+            for candidate in \
+              "$site_namespace/$TF_VAR_name" \
+              "$TF_VAR_name" \
+              "system/$TF_VAR_name"
+            do
+              [[ -n "$candidate" ]] || continue
+              echo "Trying to import existing Azure VNET Site with ID: $candidate"
+              if terraform import -no-color -input=false "$resource_address" "$candidate"; then
+                echo "Imported existing Azure VNET Site into Terraform state"
+                return 0
+              fi
+            done
+
+            return 1
+          }
+
           for attempt in {1..5}; do
             terraform state rm 'module.azure_vnet_site.time_sleep.wait_for_site_nics' 2>/dev/null || true
             terraform state rm 'module.azure_vnet_site.volterra_tf_params_action.action_apply' 2>/dev/null || true
             terraform state rm 'module.azure_vnet_site.time_sleep.wait_30_seconds' 2>/dev/null || true
-            terraform apply -no-color -auto-approve -input=false && break
+
+            apply_log="$(mktemp)"
+            if terraform apply -no-color -auto-approve -input=false 2>&1 | tee "$apply_log"; then
+              rm -f "$apply_log"
+              break
+            fi
+
+            if grep -q 'Object already exists' "$apply_log"; then
+              echo "Detected existing Azure VNET Site without Terraform state. Attempting import..."
+              if try_import_existing_site; then
+                rm -f "$apply_log"
+                echo "Import completed. Retrying terraform apply immediately..."
+                continue
+              fi
+              echo "Automatic import failed for the existing Azure VNET Site"
+            fi
+
+            rm -f "$apply_log"
             if [[ "$attempt" -eq 5 ]]; then
               echo "terraform apply failed after 5 attempts"
               exit 1
