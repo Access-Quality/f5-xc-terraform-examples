@@ -286,7 +286,7 @@ jobs:
       TF_VAR_existing_inside_subnets: ${{ needs.azure_networking.outputs.inside_subnet_names }}
       TF_VAR_existing_outside_subnets: ${{ needs.azure_networking.outputs.outside_subnet_names }}
       TF_VAR_existing_inside_rt_names: ${{ needs.azure_networking.outputs.inside_route_table_names }}
-      TF_VAR_machine_type: "Standard_D4s_v3"
+      TF_VAR_machine_type: "Standard_D4s_v4"
       # TF_VAR_azure_cloud_credentials_name: ${{ needs.azure_credentials.outputs.azure_credentials_name }}
       TF_CLOUD_WORKSPACE_AZURE_VNET_SITE: ${{ needs.apply_variables.outputs.TF_CLOUD_WORKSPACE_AZURE_VNET_SITE }}
     secrets:
@@ -451,7 +451,7 @@ jobs:
       TF_VAR_existing_outside_subnets: ${{ needs.azure_networking.outputs.outside_subnet_names }}
       TF_VAR_existing_inside_rt_names: ${{ needs.azure_networking.outputs.inside_route_table_names }}
       TF_VAR_az_cloud_credentials_name: ${{ needs.azure_credentials.outputs.azure_credentials_name }}
-      TF_VAR_machine_type: "Standard_D4s_v3"
+      TF_VAR_machine_type: "Standard_D4s_v4"
       TF_CLOUD_WORKSPACE_AZURE_VNET_SITE: ${{ needs.apply_variables.outputs.TF_CLOUD_WORKSPACE_AZURE_VNET_SITE }}
       TF_VAR_global_network_connections_list: '[{ "sli_to_global_dr": { "global_vn": { "name": "${{ needs.global_network.outputs.global_vn_name }}", "namespace": "${{ needs.global_network.outputs.global_vn_namespace }}" }}}]'
     secrets:
