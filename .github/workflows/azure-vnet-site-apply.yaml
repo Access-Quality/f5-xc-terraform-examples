@@ -443,7 +443,16 @@ jobs:
         run: terraform validate -no-color
 
       - name: Terraform Apply
-        run: terraform apply -no-color -auto-approve -input=false
+        run: |
+          for attempt in {1..5}; do
+            terraform apply -no-color -auto-approve -input=false && break
+            if [[ "$attempt" -eq 5 ]]; then
+              echo "terraform apply failed after 5 attempts"
+              exit 1
+            fi
+            echo "terraform apply failed (attempt $attempt/5) - Azure NICs may not be ready yet. Retrying in 60s..."
+            sleep 60
+          done
 
       - name: Set output vars
         id: output_vars
