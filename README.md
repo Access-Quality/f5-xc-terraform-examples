@@ -112,6 +112,14 @@ Este caso sirve para mostrar un patron de aislamiento logico por aplicacion en e
 
 ---
 
+### 11. AWS App Stack + Module 1 — `deploy-aws-module-1.yml`
+
+Despliega un **App Stack Site de F5 Distributed Cloud en AWS** con un **managed Kubernetes (mK8s)** asociado y publica el laboratorio **Buytime Module 1**. En la fase de prerequisitos el workflow crea el namespace de XC si no existe, el **VPC/subred en AWS**, las **cloud credentials**, el **sitio App Stack** y una **VM Windows tipo kiosk** para consumir la aplicación. A continuacion espera a que el site quede operativo, genera un **kubeconfig temporal** para el mK8s, despliega en Kubernetes los componentes `mysql`, `wordpress` y `kiosk`, y crea dos **HTTP Load Balancers** anunciados sobre el propio site: uno para **`kiosk.<namespace>.buytime.internal`** servido desde el mK8s y otro para **`recommendations.<namespace>.buytime.internal`** apuntando a un origin HTTPS externo. Al finalizar, el workflow revoca la credencial temporal usada para el kubeconfig.
+
+👉 [Ver guía completa](readme/README-deploy-aws-module-1.md)
+
+---
+
 ### Comparativa de Arquitectura por Caso de Uso
 
 La siguiente tabla resume la topología de cada caso: dónde se inspecciona el tráfico, si fluye por el Regional Edge global de F5, si se instala un Customer Edge en el entorno del cliente y si la aplicación puede permanecer en una red privada sin IP pública expuesta.
@@ -128,6 +136,7 @@ La siguiente tabla resume la topología de cada caso: dónde se inspecciona el t
 | 8 | `sec-re-aws-todas-apply.yml` | Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS | Arcadia Finance + DVWA + Online Boutique + crAPI | WAF · API · BD | **RE** (Regional Edge) | ✅ | ❌ | ❌ | ❌ | VM (EC2) compartida | AWS |
 | 9 | `sec-re-aws-todas-sin-ngix-apply.yml` | Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS sin nginx | Arcadia Finance + DVWA + Online Boutique + crAPI | WAF · API · BD | **RE** (Regional Edge) | ✅ | ❌ | ❌ | ❌ | VM (EC2) compartida sin nginx | AWS |
 | 10 | `sec-re-aws-todas-4lbs.yml` | Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS con 4 LBs XC | Arcadia Finance + DVWA + Online Boutique + crAPI | WAF · API · BD | **RE** (Regional Edge) | ✅ | ❌ | ❌ | ❌ | VM (EC2) compartida sin nginx + 4 LBs | AWS |
+| 11 | `deploy-aws-module-1.yml` | AWS App Stack + Module 1 | Buytime Kiosk + Recommendations | — | **App Stack / CE en AWS** | ❌ | ✅ App Stack AWS | ❌ | ✅ | mK8s en App Stack + origin HTTPS externo | AWS |
 
 > **Pruebas de seguridad:** WAF = Web Application Firewall (SQLi, XSS, RCE…) · API = API Discovery + API Protection · BD = Bot Defense
 
@@ -177,10 +186,14 @@ Cada caso de uso incluye una aplicación diferente. La siguiente tabla resume qu
 | `sec-re-aws-todas-sin-ngix-destroy.yml`    | Destroy del caso 9: elimina XC, limpia specs, destruye VM y luego infra | [README](readme/README-sec-re-aws-todas-sin-nginx-apply.md) |
 | `sec-re-aws-todas-4lbs.yml`                | WAF global + 4 LBs en XC sobre una sola VM sin nginx + API Discovery para Arcadia + API Discovery/Protection para crAPI + Bot Defense opcional | [README](readme/README-sec-re-aws-todas-4lbs-apply.md) |
 | `sec-re-aws-todas-4lbs-destroy.yml`        | Destroy del caso 10: elimina XC, limpia specs, destruye VM y luego infra | [README](readme/README-sec-re-aws-todas-4lbs-apply.md) |
+| `deploy-aws-module-1.yml`                  | App Stack en AWS + mK8s + despliegue de Buytime Module 1 + LBs internos para kiosk y recommendations | [README](readme/README-deploy-aws-module-1.md) |
 
 ---
 
 ## Historial de Cambios
+
+### 2026-04-03
+- **AWS App Stack + Module 1** (`deploy-aws-module-1.yml`): nuevo caso 11 que despliega un App Stack Site en AWS con mK8s gestionado por F5 XC, crea los prerequisitos de red y credenciales, publica el laboratorio Buytime Module 1 y expone los dominios internos `kiosk.<namespace>.buytime.internal` y `recommendations.<namespace>.buytime.internal`. Se agrega su guia dedicada.
 
 ### 2026-03-27
 - **Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS con 4 LBs XC** (`sec-re-aws-todas-4lbs.yml` / `sec-re-aws-todas-4lbs-destroy.yml`): nuevo caso 10 que reutiliza la VM compartida sin nginx del caso 9, pero divide la exposicion publica en **4 HTTP Load Balancers** de F5 XC. Arcadia, DVWA y Boutique usan LBs dedicados; **crAPI y Mailhog** comparten el cuarto LB. Se agregan guias dedicadas de despliegue y pruebas para este caso.

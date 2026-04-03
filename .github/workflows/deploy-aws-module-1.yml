@@ -1,0 +1,417 @@
+name: Deploy AWS Prerequisites And Module 1
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  PROJECT_PREFIX: ${{ vars.PROJECT_PREFIX }}
+  VPC_CIDR: ${{ vars.VPC_CIDR }}
+  XC_NAMESPACE: ${{ vars.XC_NAMESPACE }}
+  XC_SERVICE_CREDENTIAL_ROLE: ${{ vars.XC_SERVICE_CREDENTIAL_ROLE }}
+
+jobs:
+  prerequisites:
+    name: Apply prerequisites
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    outputs:
+      app_stack_name: ${{ steps.collect.outputs.app_stack_name }}
+      mk8s_cluster_name: ${{ steps.collect.outputs.mk8s_cluster_name }}
+      xc_namespace: ${{ steps.collect.outputs.xc_namespace }}
+      workspace_prefix: ${{ steps.naming.outputs.workspace_prefix }}
+    env:
+      VES_P12_PASSWORD: ${{ secrets.XC_P12_PASSWORD }}
+      TF_VAR_project_prefix: ${{ vars.PROJECT_PREFIX }}
+      TF_VAR_xc_namespace: ${{ vars.XC_NAMESPACE }}
+      TF_VAR_aws_region: ${{ vars.AWS_REGION }}
+      TF_VAR_vpc_cidr: ${{ vars.VPC_CIDR }}
+      TF_VAR_aws_access_key: ${{ secrets.AWS_ACCESS_KEY }}
+      TF_VAR_aws_secret_key: ${{ secrets.AWS_SECRET_KEY }}
+      TF_VAR_xc_api_url: ${{ secrets.XC_API_URL }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Validate workflow configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in AWS_REGION PROJECT_PREFIX VPC_CIDR XC_NAMESPACE; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Missing required repository variable: ${name}."
+              exit 1
+            fi
+          done
+          python3 - <<'PY'
+          import ipaddress
+          import os
+          import sys
+
+          cidr = os.environ["VPC_CIDR"]
+          try:
+              ipaddress.ip_network(cidr, strict=False)
+          except Exception as exc:
+              print(f"::error::VPC_CIDR must be a valid CIDR block. Received {cidr!r}: {exc}")
+              sys.exit(1)
+          PY
+
+      - name: Compute workspace names
+        id: naming
+        shell: bash
+        run: |
+          set -euo pipefail
+          raw="${PROJECT_PREFIX}-${XC_NAMESPACE}"
+          workspace_prefix="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9-' '-')"
+          workspace_prefix="${workspace_prefix#-}"
+          workspace_prefix="${workspace_prefix%-}"
+          if [[ -z "$workspace_prefix" ]]; then
+            workspace_prefix="xcawsedgedemo"
+          fi
+          echo "workspace_prefix=$workspace_prefix" >> "$GITHUB_OUTPUT"
+          echo "PREREQUISITES_WORKSPACE=${workspace_prefix}-prerequisites" >> "$GITHUB_ENV"
+          echo "MODULE1_WORKSPACE=${workspace_prefix}-module-1" >> "$GITHUB_ENV"
+
+      - name: Decode XC API credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' '${{ secrets.XC_API_P12_FILE }}' | base64 --decode > "$RUNNER_TEMP/xc-api-creds.p12"
+          echo "TF_VAR_xc_api_p12_file=$RUNNER_TEMP/xc-api-creds.p12" >> "$GITHUB_ENV"
+
+      - name: Validate XC API client certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          openssl pkcs12 \
+            -in "$RUNNER_TEMP/xc-api-creds.p12" \
+            -clcerts \
+            -legacy \
+            -nokeys \
+            -passin env:VES_P12_PASSWORD \
+            -out "$RUNNER_TEMP/xc-api-cert.pem"
+          end_date="$(openssl x509 -in "$RUNNER_TEMP/xc-api-cert.pem" -noout -enddate | cut -d= -f2-)"
+          if ! openssl x509 -in "$RUNNER_TEMP/xc-api-cert.pem" -checkend 0 -noout; then
+            echo "::error::XC API client certificate is expired. notAfter=${end_date}. Rotate the certificate in F5 XC and update secrets XC_API_P12_FILE and XC_P12_PASSWORD."
+            exit 1
+          fi
+
+      - name: Terraform init namespace probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=aws-mk8s-vk8s/namespace-probe init
+
+      - name: Detect XC namespace state
+        shell: bash
+        run: |
+          set -euo pipefail
+          probe_log="$RUNNER_TEMP/namespace-probe.log"
+          if terraform -chdir=aws-mk8s-vk8s/namespace-probe plan \
+            -input=false \
+            -no-color \
+            >"$probe_log" 2>&1
+          then
+            echo "TF_VAR_create_xc_namespace=false" >> "$GITHUB_ENV"
+          elif grep -Eiq 'status code 404|object not found|not found|does not exist' "$probe_log"
+          then
+            echo "TF_VAR_create_xc_namespace=true" >> "$GITHUB_ENV"
+          else
+            cat "$probe_log"
+            echo "::error::Unable to determine XC namespace state from provider probe."
+            exit 1
+          fi
+
+      - name: Terraform init prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/prerequisites.backend.hcl" <<EOF
+          organization = "${{ secrets.TF_CLOUD_ORGANIZATION }}"
+          workspaces {
+            name = "${PREREQUISITES_WORKSPACE}"
+          }
+          EOF
+          terraform -chdir=aws-mk8s-vk8s/prerequisites init \
+            -backend-config="$RUNNER_TEMP/prerequisites.backend.hcl"
+
+      - name: Terraform apply prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=aws-mk8s-vk8s/prerequisites apply -auto-approve
+
+      - name: Collect prerequisite outputs
+        id: collect
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "app_stack_name=$(terraform -chdir=aws-mk8s-vk8s/prerequisites output -raw app_stack_name)" >> "$GITHUB_OUTPUT"
+          echo "mk8s_cluster_name=$(terraform -chdir=aws-mk8s-vk8s/prerequisites output -raw mk8s_cluster_name)" >> "$GITHUB_OUTPUT"
+          echo "xc_namespace=$(terraform -chdir=aws-mk8s-vk8s/prerequisites output -raw xc_namespace)" >> "$GITHUB_OUTPUT"
+
+  module_1:
+    name: Apply module 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    needs: prerequisites
+    env:
+      VES_P12_PASSWORD: ${{ secrets.XC_P12_PASSWORD }}
+      TF_VAR_project_prefix: ${{ vars.PROJECT_PREFIX }}
+      TF_VAR_xc_namespace: ${{ needs.prerequisites.outputs.xc_namespace }}
+      TF_VAR_xc_api_url: ${{ secrets.XC_API_URL }}
+      TF_VAR_app_stack_name: ${{ needs.prerequisites.outputs.app_stack_name }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: latest
+
+      - name: Restore workspace names
+        shell: bash
+        run: |
+          set -euo pipefail
+          workspace_prefix='${{ needs.prerequisites.outputs.workspace_prefix }}'
+          echo "MODULE1_WORKSPACE=${workspace_prefix}-module-1" >> "$GITHUB_ENV"
+
+      - name: Decode XC API credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' '${{ secrets.XC_API_P12_FILE }}' | base64 --decode > "$RUNNER_TEMP/xc-api-creds.p12"
+          echo "TF_VAR_xc_api_p12_file=$RUNNER_TEMP/xc-api-creds.p12" >> "$GITHUB_ENV"
+
+      - name: Validate XC API client certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          openssl pkcs12 \
+            -in "$RUNNER_TEMP/xc-api-creds.p12" \
+            -clcerts \
+            -legacy \
+            -nokeys \
+            -passin env:VES_P12_PASSWORD \
+            -out "$RUNNER_TEMP/xc-api-cert.pem"
+          openssl pkcs12 \
+            -in "$RUNNER_TEMP/xc-api-creds.p12" \
+            -legacy \
+            -nocerts \
+            -nodes \
+            -passin env:VES_P12_PASSWORD \
+            -out "$RUNNER_TEMP/xc-api-key.pem"
+          end_date="$(openssl x509 -in "$RUNNER_TEMP/xc-api-cert.pem" -noout -enddate | cut -d= -f2-)"
+          if ! openssl x509 -in "$RUNNER_TEMP/xc-api-cert.pem" -checkend 0 -noout; then
+            echo "::error::XC API client certificate is expired. notAfter=${end_date}. Rotate the certificate in F5 XC and update secrets XC_API_P12_FILE and XC_P12_PASSWORD."
+            exit 1
+          fi
+
+      - name: Wait for XC App Stack site readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          api_url='${{ secrets.XC_API_URL }}'
+          api_root="${api_url%/}"
+          api_root="${api_root%/api}"
+          site_name='${{ needs.prerequisites.outputs.app_stack_name }}'
+          site_endpoint="${api_root}/api/config/namespaces/system/sites/${site_name}"
+          attempts=120
+          sleep_seconds=30
+          response_file="$RUNNER_TEMP/site-status.json"
+
+          for attempt in $(seq 1 "$attempts"); do
+            http_code="$(curl \
+              --silent \
+              --show-error \
+              --output "$response_file" \
+              --write-out '%{http_code}' \
+              --cert "$RUNNER_TEMP/xc-api-cert.pem" \
+              --key "$RUNNER_TEMP/xc-api-key.pem" \
+              "$site_endpoint" || true)"
+
+            if [[ "$http_code" == "200" ]]; then
+              site_state="$(jq -r '[.spec?.site_state, .replace_form?.spec?.site_state, .site_state, .status[]?.site_state] | map(select(. != null and . != "")) | first // ""' "$response_file")"
+              operational_status="$(jq -r '[.status[]?.conditions[]? | select(.type == "Operational") | .status] | map(select(. != null and . != "")) | first // ""' "$response_file")"
+              status_summary="$(jq -r '[.status[]?.conditions[]? | select(.type != null and .status != null) | "\(.type)=\(.status)" , (.status[]?.site_state // empty), .spec?.site_state, .replace_form?.spec?.site_state] | map(select(. != null and . != "")) | unique | join(" | ")' "$response_file")"
+              if [[ -z "$status_summary" || "$status_summary" == "null" ]]; then
+                status_summary="no detailed status"
+              fi
+
+              echo "XC site state: ${site_state:-unknown}"
+              echo "XC site operational status: ${operational_status:-unknown}"
+              echo "XC site details: ${status_summary}"
+
+              case "$site_state" in
+                ONLINE|ORCHESTRATION_COMPLETE|VALIDATION_SUCCESS)
+                  exit 0
+                  ;;
+                FAILED|FAILED_INACTIVE|ERROR_IN_ORCHESTRATION|VALIDATION_FAILED|ERROR_DELETING_CLOUD_RESOURCES|ERROR_UPDATING_CLOUD_RESOURCES)
+                  echo "::error::XC site entered a terminal state: ${site_state}."
+                  cat "$response_file"
+                  exit 1
+                  ;;
+              esac
+            else
+              echo "Unable to read XC site status yet (attempt ${attempt}/${attempts}, HTTP ${http_code:-curl-error})."
+              if [[ -s "$response_file" ]]; then
+                cat "$response_file"
+              fi
+            fi
+
+            if [[ "$attempt" -lt "$attempts" ]]; then
+              echo "XC site not ready yet (attempt ${attempt}/${attempts}); waiting ${sleep_seconds}s"
+              sleep "$sleep_seconds"
+            fi
+          done
+
+          echo "::error::Timed out waiting for the XC App Stack site to become ready."
+          if [[ -s "$response_file" ]]; then
+            cat "$response_file"
+          fi
+          exit 1
+
+      - name: Terraform init kubeconfig helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=aws-mk8s-vk8s/kubeconfig init
+
+      - name: Generate site kubeconfig
+        id: kubeconfig
+        shell: bash
+        run: |
+          set -euo pipefail
+          prefix_part="$(printf '%s' "$PROJECT_PREFIX" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9-' '-' | cut -c1-12)"
+          prefix_part="${prefix_part#-}"
+          prefix_part="${prefix_part%-}"
+          if [[ -z "$prefix_part" ]]; then
+            prefix_part="xcaws"
+          fi
+          run_suffix="${GITHUB_RUN_ID:(-8)}"
+          credential_name="${prefix_part}-${run_suffix}-skcfg"
+          credential_name="${credential_name#-}"
+          credential_name="${credential_name%-}"
+          candidates=()
+          if [[ -n "${XC_SERVICE_CREDENTIAL_ROLE:-}" ]]; then
+            candidates+=("$XC_SERVICE_CREDENTIAL_ROLE")
+          fi
+          candidates+=("ves-io-admin-role" "Admin" "admin" "Standard" "standard" "ves-io-admin")
+
+          selected_role=""
+          for role in "${candidates[@]}"; do
+            [[ -z "$role" ]] && continue
+            if [[ " ${tried_roles:-} " == *" $role "* ]]; then
+              continue
+            fi
+            tried_roles="${tried_roles:-} $role"
+
+            apply_log="$RUNNER_TEMP/kubeconfig-apply-${role}.log"
+            if terraform -chdir=aws-mk8s-vk8s/kubeconfig apply -auto-approve \
+              -var="project_prefix=${PROJECT_PREFIX}" \
+              -var="site_name=${{ needs.prerequisites.outputs.app_stack_name }}" \
+              -var="xc_namespace=${{ needs.prerequisites.outputs.xc_namespace }}" \
+              -var="service_credential_role=${role}" \
+              -var="credential_name=${credential_name}" \
+              -var="xc_api_url=${{ secrets.XC_API_URL }}" \
+              -var="xc_api_p12_file=$RUNNER_TEMP/xc-api-creds.p12" \
+              >"$apply_log" 2>&1
+            then
+              selected_role="$role"
+              break
+            fi
+
+            if ! grep -q "role '.*' is not found or it is disabled" "$apply_log"; then
+              cat "$apply_log"
+              exit 1
+            fi
+          done
+
+          if [[ -z "$selected_role" ]]; then
+            echo "::error::Unable to create the XC site kubeconfig credential with any known role. Set repository variable XC_SERVICE_CREDENTIAL_ROLE to a valid role for this tenant."
+            exit 1
+          fi
+
+          terraform -chdir=aws-mk8s-vk8s/kubeconfig output -raw kubeconfig_content > "$RUNNER_TEMP/mk8s-kubeconfig.yaml"
+          echo "credential_name=${credential_name}" >> "$GITHUB_OUTPUT"
+          echo "kubeconfig_path=$RUNNER_TEMP/mk8s-kubeconfig.yaml" >> "$GITHUB_OUTPUT"
+          echo "service_credential_role=${selected_role}" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for mK8s API readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          kubeconfig_path="${{ steps.kubeconfig.outputs.kubeconfig_path }}"
+          attempts=80
+          sleep_seconds=15
+
+          for attempt in $(seq 1 "$attempts"); do
+            if kubectl --kubeconfig "$kubeconfig_path" --request-timeout=10s get --raw=/version >/dev/null 2>&1 && \
+              kubectl --kubeconfig "$kubeconfig_path" --request-timeout=10s get nodes >/dev/null 2>&1; then
+              kubectl --kubeconfig "$kubeconfig_path" --request-timeout=10s get nodes
+              exit 0
+            fi
+
+            echo "mK8s API not ready yet (attempt ${attempt}/${attempts}); waiting ${sleep_seconds}s"
+            sleep "$sleep_seconds"
+          done
+
+          echo "::error::Timed out waiting for the mK8s API server to become ready."
+          kubectl --kubeconfig "$kubeconfig_path" --request-timeout=10s get --raw=/version || true
+          kubectl --kubeconfig "$kubeconfig_path" --request-timeout=10s cluster-info || true
+          exit 1
+
+      - name: Terraform init module 1
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/module-1.backend.hcl" <<EOF
+          organization = "${{ secrets.TF_CLOUD_ORGANIZATION }}"
+          workspaces {
+            name = "${MODULE1_WORKSPACE}"
+          }
+          EOF
+          terraform -chdir=aws-mk8s-vk8s/module-1 init \
+            -backend-config="$RUNNER_TEMP/module-1.backend.hcl"
+
+      - name: Terraform apply module 1
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=aws-mk8s-vk8s/module-1 apply -auto-approve \
+            -var="project_prefix=${PROJECT_PREFIX}" \
+            -var="xc_namespace=${{ needs.prerequisites.outputs.xc_namespace }}" \
+            -var="xc_api_url=${{ secrets.XC_API_URL }}" \
+            -var="xc_api_p12_file=$RUNNER_TEMP/xc-api-creds.p12" \
+            -var="kubeconfig_path=${{ steps.kubeconfig.outputs.kubeconfig_path }}" \
+            -var="app_stack_name=${{ needs.prerequisites.outputs.app_stack_name }}"
+
+      - name: Revoke temporary kubeconfig credential
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          terraform -chdir=aws-mk8s-vk8s/kubeconfig destroy -auto-approve \
+            -var="project_prefix=${PROJECT_PREFIX}" \
+            -var="site_name=${{ needs.prerequisites.outputs.app_stack_name }}" \
+            -var="xc_namespace=${{ needs.prerequisites.outputs.xc_namespace }}" \
+            -var="service_credential_role=${{ steps.kubeconfig.outputs.service_credential_role }}" \
+            -var="credential_name=${{ steps.kubeconfig.outputs.credential_name }}" \
+            -var="xc_api_url=${{ secrets.XC_API_URL }}" \
+            -var="xc_api_p12_file=$RUNNER_TEMP/xc-api-creds.p12"
