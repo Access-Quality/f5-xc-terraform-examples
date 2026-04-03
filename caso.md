@@ -1,8 +1,10 @@
 # Casos de Uso Consolidados
 
-Este documento resume los 10 casos actualmente descritos en el README principal del repositorio y agrega un caso adicional basado en la guia externa de F5 DevCentral para Edge Compute y Enterprise Networking en AWS.
+Este documento resume los 10 casos actualmente descritos en el README principal del repositorio y agrega 5 casos adicionales basados en guias internas y externas relacionadas con application delivery, AppConnect, MCN y NAT.
 
 ---
+
+## Application Delivery y Seguridad
 
 ## Caso 1. API + WAF + Bot Defense en RE para Arcadia en AWS
 
@@ -16,51 +18,6 @@ Despliega proteccion sobre el **Regional Edge (RE)** de F5 Distributed Cloud par
 - API Protection opera en modo report para no interrumpir la UI.
 
 **Guia local:** [readme/README-waf-re-aws-apply.md](readme/README-waf-re-aws-apply.md)
-
----
-
-## Caso 2. Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en una sola VM AWS
-
-**Workflow:** `sec-re-aws-todas-apply.yml`
-
-Consolida **cuatro aplicaciones** principales y **Mailhog** en una sola instancia EC2 de AWS, con **nginx en el host** y un **unico HTTP Load Balancer** en el RE de F5 XC.
-
-**Puntos clave:**
-- Una sola VM publica multiples apps usando routing por `Host` desde nginx.
-- WAF global, API Discovery y API Protection para Arcadia y crAPI.
-- Incluye validaciones de readiness del origen y de los endpoints publicos.
-
-**Guia local:** [readme/README-sec-re-aws-todas-apply.md](readme/README-sec-re-aws-todas-apply.md)
-
----
-
-## Caso 3. Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS sin nginx
-
-**Workflow:** `sec-re-aws-todas-sin-ngix-apply.yml`
-
-Mantiene el modelo de una sola VM compartida, pero elimina **nginx** y mueve la logica de enrutamiento hacia el **HTTP Load Balancer** de XC usando varios origin pools.
-
-**Puntos clave:**
-- Cada servicio se expone en un puerto distinto del host.
-- El LB de XC resuelve el backend por `Host` y `path`.
-- Simplifica el host, pero abre mas puertos en el security group que el caso 8.
-
-**Guia local:** [readme/README-sec-re-aws-todas-sin-nginx-apply.md](readme/README-sec-re-aws-todas-sin-nginx-apply.md)
-
----
-
-## Caso 4. Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS con 4 LBs
-
-**Workflow:** `sec-re-aws-todas-4lbs.yml`
-
-Parte del mismo despliegue compartido del caso 9, pero divide la exposicion publica en **cuatro HTTP Load Balancers separados** para mejorar aislamiento logico por aplicacion.
-
-**Puntos clave:**
-- Arcadia, DVWA y Boutique tienen LB dedicado.
-- crAPI comparte LB con Mailhog.
-- Mantiene una sola VM en AWS, pero separa la capa de exposicion en XC.
-
-**Guia local:** [readme/README-sec-re-aws-todas-4lbs-apply.md](readme/README-sec-re-aws-todas-4lbs-apply.md)
 
 ---
 
@@ -124,11 +81,78 @@ Despliega seguridad de APIs para **crAPI** en **EKS** con inspeccion en **RE**, 
 
 ---
 
+## Caso 12. App Delivery & Security para workloads distribuidos en entornos hibridos
+
+**Fuente local:** `workflow-guides/application-delivery-security/workload/README.rst`
+
+Este caso describe un patron de **application delivery y seguridad uniforme** para workloads repetidos en distintos entornos como **VMware**, **OpenShift**, **Nutanix** y nubes publicas, usando **Secure Mesh Site v2**, **Customer Edge** y **Regional Edge** de F5 Distributed Cloud.
+
+**Objetivo general:**
+- Mantener politicas consistentes de entrega y seguridad para aplicaciones desplegadas en varias plataformas.
+- Facilitar la incorporacion de nuevos workloads sin cambiar el modelo operativo.
+- Proteger aplicaciones como **Juice Shop**, **DVWA** y **NGINX** con WAF y observabilidad centralizada.
+
+**Puntos clave:**
+- Cubre entornos on-prem y cloud dentro de un unico modelo de conectividad.
+- Expone como agregar nuevas instancias de workloads ya existentes en VMware, OCP, Nutanix y Azure.
+- Refuerza el patron de apps no expuestas directamente, conectadas por CE mediante Site Local Inside.
+
+**Guia local:** [workflow-guides/application-delivery-security/workload/README.rst](workflow-guides/application-delivery-security/workload/README.rst)
+
+---
+
+## Escenarios Consolidados en AWS
+
+## Caso 2. Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en una sola VM AWS
+
+**Workflow:** `sec-re-aws-todas-apply.yml`
+
+Consolida **cuatro aplicaciones** principales y **Mailhog** en una sola instancia EC2 de AWS, con **nginx en el host** y un **unico HTTP Load Balancer** en el RE de F5 XC.
+
+**Puntos clave:**
+- Una sola VM publica multiples apps usando routing por `Host` desde nginx.
+- WAF global, API Discovery y API Protection para Arcadia y crAPI.
+- Incluye validaciones de readiness del origen y de los endpoints publicos.
+
+**Guia local:** [readme/README-sec-re-aws-todas-apply.md](readme/README-sec-re-aws-todas-apply.md)
+
+---
+
+## Caso 3. Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS sin nginx
+
+**Workflow:** `sec-re-aws-todas-sin-ngix-apply.yml`
+
+Mantiene el modelo de una sola VM compartida, pero elimina **nginx** y mueve la logica de enrutamiento hacia el **HTTP Load Balancer** de XC usando varios origin pools.
+
+**Puntos clave:**
+- Cada servicio se expone en un puerto distinto del host.
+- El LB de XC resuelve el backend por `Host` y `path`.
+- Simplifica el host, pero abre mas puertos en el security group que el caso 8.
+
+**Guia local:** [readme/README-sec-re-aws-todas-sin-nginx-apply.md](readme/README-sec-re-aws-todas-sin-nginx-apply.md)
+
+---
+
+## Caso 4. Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS con 4 LBs
+
+**Workflow:** `sec-re-aws-todas-4lbs.yml`
+
+Parte del mismo despliegue compartido del caso 9, pero divide la exposicion publica en **cuatro HTTP Load Balancers separados** para mejorar aislamiento logico por aplicacion.
+
+**Puntos clave:**
+- Arcadia, DVWA y Boutique tienen LB dedicado.
+- crAPI comparte LB con Mailhog.
+- Mantiene una sola VM en AWS, pero separa la capa de exposicion en XC.
+
+**Guia local:** [readme/README-sec-re-aws-todas-4lbs-apply.md](readme/README-sec-re-aws-todas-4lbs-apply.md)
+
+---
+
+## Networking y Secure Multi-Cloud Networking
+
 ## Caso 9. MCN Network Connect entre AWS y Azure
 
 **Workflow:** `teachable-01-mc-networkconnect-apply.yml`
-
-Implementa **Multi-Cloud Networking (MCN)** entre **AWS y Azure** usando F5 XC como plano de control y conectividad.
 
 **Puntos clave:**
 - Despliega CE en ambas nubes.
@@ -153,6 +177,48 @@ Despliega **Bookinfo** como aplicacion distribuida multi-cloud entre **EKS en AW
 **Guia local:** [readme/README-bookinfo-smcn-apply.md](readme/README-bookinfo-smcn-apply.md)
 
 ---
+
+## Caso 14. Secure Network Fabric con AWS TGW, VMware y segmentacion segura
+
+**Fuente local:** `workflow-guides/smcn/secure-network-fabric/README.md`
+
+Este caso implementa una **fabrica de red segura** sobre **Multi-Cloud Networking**, combinando **AWS TGW Site**, varios **VPCs**, un **Secure Mesh Site** en **VMware**, **Cloud Connect**, **Segment Connectors**, **Site Mesh Group** y politicas de **Enhanced Firewall**.
+
+**Objetivo general:**
+- Conectar VPCs de distintas cuentas y un datacenter VMware bajo una topologia comun.
+- Segmentar trafico entre redes `prod`, `dev`, `shared` y `external`.
+- Controlar el acceso entre segmentos con firewall distribuido y metodos network-centric y app-centric.
+
+**Puntos clave:**
+- Integra AWS y VMware dentro de un mismo tejido de red.
+- Usa Cloud Connect para unir VPCs y Segment Connectors para definir conectividad permitida.
+- Cierra el caso con politicas de firewall y un enfoque de Extranet tanto centrado en red como en aplicacion.
+
+**Guia local:** [workflow-guides/smcn/secure-network-fabric/README.md](workflow-guides/smcn/secure-network-fabric/README.md)
+
+---
+
+## Caso 15. NAT para solapamiento IP, enmascaramiento y salida a internet
+
+**Fuente local:** `workflow-guides/smcn/nat/README.md`
+
+Este caso amplia el escenario de SMCN con politicas de **NAT** para resolver tres problemas frecuentes: **CIDRs solapados**, **enmascaramiento de IP origen** entre AWS y VMware, y **SNAT hacia internet** usando una **Elastic IP** del sitio TGW en AWS.
+
+**Objetivo general:**
+- Resolver conflictos de direccionamiento entre redes conectadas por MCN.
+- Enmascarar IPs origen para simplificar politicas y proteger topologias internas.
+- Estandarizar la salida a internet mediante SNAT sobre una IP publica controlada.
+
+**Puntos clave:**
+- Usa **Virtual Subnet NAT** para separar redes con rangos superpuestos.
+- Aplica **SNAT Pool** para ocultar el origen del trafico entre AWS y VMware.
+- Muestra un patron reutilizable de egress controlado con Elastic IP en AWS TGW Site.
+
+**Guia local:** [workflow-guides/smcn/nat/README.md](workflow-guides/smcn/nat/README.md)
+
+---
+
+## Edge Compute, App Stack y GenAI
 
 ## Caso 11. Edge Compute y Enterprise Networking en AWS para BuyTime
 
@@ -179,6 +245,26 @@ Este caso agrega una guia de referencia externa orientada a **Edge Compute**, **
 
 ---
 
+## Caso 13. GenAI distribuida con AppConnect y WAF entre AWS y GCP
+
+**Fuente local:** `workflow-guides/smcn/genai-appconnect-waf/xc-console-demo-guide.rst`
+
+Este caso conecta y protege una aplicacion **Generative AI** distribuida entre **AWS** y **GCP**. El servicio **LLM** corre en **EKS**, el frontend **GenAI** corre en **GKE**, y F5 XC se usa para publicar el servicio remoto como local, exponer la aplicacion y aplicar controles de seguridad.
+
+**Objetivo general:**
+- Conectar un frontend GenAI en GKE con un backend LLM en EKS sin usar NGINX Ingress Controller.
+- Exponer la aplicacion externamente mediante balanceo de F5 XC.
+- Mitigar la divulgacion de informacion sensible mediante **Data Guard** en el HTTP Load Balancer.
+
+**Puntos clave:**
+- Usa CE sobre Kubernetes en ambos clusters para conectividad entre nubes.
+- Publica el servicio `llama.llm` desde EKS como servicio local para GKE.
+- Incluye una prueba explicita de DLP antes y despues de habilitar Data Guard.
+
+**Guia local:** [workflow-guides/smcn/genai-appconnect-waf/xc-console-demo-guide.rst](workflow-guides/smcn/genai-appconnect-waf/xc-console-demo-guide.rst)
+
+---
+
 ## Resumen Rapido
 
 | Caso | Patron principal | Ubicacion de inspeccion/conectividad | Aplicacion o dominio principal |
@@ -194,3 +280,7 @@ Este caso agrega una guia de referencia externa orientada a **Edge Compute**, **
 | 9 | MCN entre nubes | CE + Global VN | Redes AWS y Azure |
 | 10 | App distribuida multi-cloud | RE + CE | Bookinfo |
 | 11 | Edge Compute + App Stack + MCN | App Stack + CE + RE | BuyTime |
+| 12 | Delivery y seguridad para workloads hibridos | CE + RE | Juice Shop + DVWA + NGINX |
+| 13 | GenAI distribuida con AppConnect y WAF | CE en EKS + CE en GKE | LLM + frontend GenAI |
+| 14 | Secure Network Fabric | AWS TGW + Secure Mesh + Segmentacion | VPCs AWS + VMware |
+| 15 | NAT para MCN | NAT Policies + TGW Site | Overlap IP + SNAT + egress |
