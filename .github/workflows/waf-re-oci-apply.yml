@@ -1,0 +1,237 @@
+name: "WAF en RE para VM en OCI - Deploy"
+
+# IMPORTANT: The three Terraform Cloud workspaces used by this workflow
+# (INFRA, VM, XC) must be configured with execution mode "Local" so that
+# Terraform runs on the GitHub Actions runner and reads variables from the
+# environment instead of from TFC variable sets.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  terraform_infra:
+    name: "OCI Infra"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./oci/waf-re-oci/infra
+    env:
+      TF_VAR_tf_cloud_organization: ${{ secrets.TF_CLOUD_ORGANIZATION }}
+      TF_VAR_project_prefix: ${{ vars.PROJECT_PREFIX }}
+      TF_VAR_oci_region: ${{ vars.OCI_REGION }}
+      TF_VAR_tenancy_ocid: ${{ secrets.OCI_TENANCY_OCID }}
+      TF_VAR_user_ocid: ${{ secrets.OCI_USER_OCID }}
+      TF_VAR_fingerprint: ${{ secrets.OCI_FINGERPRINT }}
+      TF_VAR_private_key: ${{ secrets.OCI_PRIVATE_KEY }}
+      TF_VAR_compartment_ocid: ${{ secrets.OCI_COMPARTMENT_OCID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Setup Terraform Backend
+        id: backend
+        run: |
+          cat > backend.tf << EOF
+          terraform {
+            cloud {
+              organization = "${{ secrets.TF_CLOUD_ORGANIZATION }}"
+              workspaces {
+                name = "${{ vars.TF_CLOUD_WORKSPACE_OCI_INFRA }}"
+              }
+            }
+          }
+          EOF
+
+      - name: Terraform Init
+        id: init
+        run: terraform init
+
+      - name: Terraform Validate
+        id: validate
+        run: terraform validate -no-color
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve -input=false
+
+  terraform_vm:
+    name: "OCI VM (Arcadia)"
+    runs-on: ubuntu-latest
+    needs: terraform_infra
+    defaults:
+      run:
+        working-directory: ./oci/waf-re-oci/vm
+    env:
+      TF_VAR_tf_cloud_organization: ${{ secrets.TF_CLOUD_ORGANIZATION }}
+      TF_VAR_tf_cloud_workspace_infra: ${{ vars.TF_CLOUD_WORKSPACE_OCI_INFRA }}
+      TF_VAR_tenancy_ocid: ${{ secrets.OCI_TENANCY_OCID }}
+      TF_VAR_user_ocid: ${{ secrets.OCI_USER_OCID }}
+      TF_VAR_fingerprint: ${{ secrets.OCI_FINGERPRINT }}
+      TF_VAR_private_key: ${{ secrets.OCI_PRIVATE_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Extract SSH public key
+        run: |
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/id_rsa
+          chmod 600 /tmp/id_rsa
+          SSH_PUBLIC_KEY=$(ssh-keygen -y -f /tmp/id_rsa)
+          rm -f /tmp/id_rsa
+          echo "TF_VAR_ssh_key=${SSH_PUBLIC_KEY}" >> $GITHUB_ENV
+
+      - name: Setup Terraform Backend
+        id: backend
+        run: |
+          cat > backend.tf << EOF
+          terraform {
+            cloud {
+              organization = "${{ secrets.TF_CLOUD_ORGANIZATION }}"
+              workspaces {
+                name = "${{ vars.TF_CLOUD_WORKSPACE_OCI_VM }}"
+              }
+            }
+          }
+          EOF
+
+      - name: Terraform Init
+        id: init
+        run: terraform init
+
+      - name: Terraform Validate
+        id: validate
+        run: terraform validate -no-color
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve -input=false
+
+  terraform_xc:
+    name: "F5XC WAF"
+    runs-on: ubuntu-latest
+    needs: terraform_vm
+    defaults:
+      run:
+        working-directory: ./oci/waf-re-oci/xc
+    env:
+      TF_VAR_tf_cloud_organization: ${{ secrets.TF_CLOUD_ORGANIZATION }}
+      TF_VAR_tf_cloud_workspace_infra: ${{ vars.TF_CLOUD_WORKSPACE_OCI_INFRA }}
+      TF_VAR_tf_cloud_workspace_vm: ${{ vars.TF_CLOUD_WORKSPACE_OCI_VM }}
+      TF_VAR_api_url: ${{ secrets.XC_API_URL }}
+      TF_VAR_xc_namespace: ${{ vars.XC_NAMESPACE }}
+      TF_VAR_app_domain: ${{ vars.ARCADIA_DOMAIN }}
+      TF_VAR_xc_waf_blocking: ${{ vars.XC_WAF_BLOCKING }}
+      TF_VAR_xc_bot_defense: ${{ vars.XC_BOT_DEFENSE }}
+      VES_P12_PASSWORD: ${{ secrets.XC_P12_PASSWORD }}
+      VOLT_API_P12_FILE: api.p12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Setup Terraform Backend
+        id: backend
+        run: |
+          cat > backend.tf << EOF
+          terraform {
+            cloud {
+              organization = "${{ secrets.TF_CLOUD_ORGANIZATION }}"
+              workspaces {
+                name = "${{ vars.TF_CLOUD_WORKSPACE_OCI_XC }}"
+              }
+            }
+          }
+          EOF
+          echo "${{ secrets.XC_API_P12_FILE }}" | base64 -d > api.p12
+
+      - name: Create XC Namespace if not exists
+        run: |
+          XC_API_BASE=$(echo "${{ secrets.XC_API_URL }}" | sed 's|/api$||')
+          openssl pkcs12 -legacy -in api.p12 -passin pass:"${{ secrets.XC_P12_PASSWORD }}" -nokeys -clcerts -out /tmp/client.crt 2>/dev/null
+          openssl pkcs12 -legacy -in api.p12 -passin pass:"${{ secrets.XC_P12_PASSWORD }}" -nocerts -nodes -out /tmp/client.key 2>/dev/null
+          if [ ! -s /tmp/client.crt ] || [ ! -s /tmp/client.key ]; then
+            echo "ERROR: Failed to extract cert/key from P12"
+            exit 1
+          fi
+          HTTP_CODE=$(curl -s -o /tmp/ns_response.json -w "%{http_code}" \
+            --cert /tmp/client.crt \
+            --key /tmp/client.key \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -d "{\"metadata\":{\"name\":\"${{ vars.XC_NAMESPACE }}\",\"namespace\":\"\"},\"spec\":{}}" \
+            "${XC_API_BASE}/api/web/namespaces")
+          rm -f /tmp/client.crt /tmp/client.key
+          echo "Response code: ${HTTP_CODE}"
+          cat /tmp/ns_response.json
+          if [ "${HTTP_CODE}" != "200" ] && [ "${HTTP_CODE}" != "409" ]; then
+            echo "ERROR: Failed to create namespace (HTTP ${HTTP_CODE})"
+            exit 1
+          fi
+          echo "Namespace ready (200=created, 409=already existed)"
+
+      - name: Upload Arcadia swagger to F5 XC object store
+        run: |
+          SWAGGER_NAME="arcadia-oas3"
+          API_URL="${{ secrets.XC_API_URL }}"
+          NAMESPACE="${{ vars.XC_NAMESPACE }}"
+
+          openssl pkcs12 -legacy -in api.p12 -clcerts -nokeys \
+            -passin pass:"${{ secrets.XC_P12_PASSWORD }}" -out /tmp/cert.pem 2>/dev/null || \
+          openssl pkcs12 -in api.p12 -clcerts -nokeys \
+            -passin pass:"${{ secrets.XC_P12_PASSWORD }}" -out /tmp/cert.pem
+          openssl pkcs12 -legacy -in api.p12 -nocerts -nodes \
+            -passin pass:"${{ secrets.XC_P12_PASSWORD }}" -out /tmp/key.pem 2>/dev/null || \
+          openssl pkcs12 -in api.p12 -nocerts -nodes \
+            -passin pass:"${{ secrets.XC_P12_PASSWORD }}" -out /tmp/key.pem
+
+          curl -sf "https://raw.githubusercontent.com/Access-Quality/f5-xc-terraform-examples/main/arcadia/arcadia-oas3-2.0.1.json" \
+            -o /tmp/swagger.json
+
+          # Strip empty string keys (F5 XC rejects specs containing them)
+          python3 -c "import json; f=open('/tmp/swagger.json'); d=json.load(f); f.close(); clean=lambda o: {k:clean(v) for k,v in o.items() if k!=''} if isinstance(o,dict) else [clean(i) for i in o] if isinstance(o,list) else o; open('/tmp/swagger.json','w').write(json.dumps(clean(d)))"
+
+          BODY=$(python3 -c "import json,sys; f=open('/tmp/swagger.json'); c=f.read(); f.close(); b={'name':sys.argv[1],'namespace':sys.argv[2],'object_type':'swagger','string_value':c,'content_format':'json','no_attributes':{}}; print(json.dumps(b))" "${SWAGGER_NAME}" "${NAMESPACE}")
+
+          RESP=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X PUT \
+            --cert /tmp/cert.pem --key /tmp/key.pem \
+            -H "Content-Type: application/json" \
+            -d "${BODY}" \
+            "${API_URL}/object_store/namespaces/${NAMESPACE}/stored_objects/swagger/${SWAGGER_NAME}")
+          HTTP_STATUS=$(echo "${RESP}" | grep -o "HTTP_STATUS:[0-9]*" | cut -d: -f2)
+          RESP_BODY=$(echo "${RESP}" | sed '/HTTP_STATUS:/d')
+          if [ "${HTTP_STATUS}" != "200" ]; then
+            echo "ERROR: Swagger upload failed with HTTP ${HTTP_STATUS}"
+            echo "${RESP_BODY}"
+            exit 1
+          fi
+
+          SPEC_URL=$(echo "${RESP_BODY}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['metadata']['url'])")
+          echo "Swagger uploaded: ${SPEC_URL}"
+          python3 -c "import sys,json; print('TF_VAR_xc_api_spec=' + json.dumps([sys.argv[1]]))" "${SPEC_URL}" >> "$GITHUB_ENV"
+          rm -f /tmp/cert.pem /tmp/key.pem /tmp/swagger.json
+
+      - name: Terraform Init
+        id: init
+        run: terraform init
+
+      - name: Terraform Validate
+        id: validate
+        run: terraform validate -no-color
+
+      - name: Remove namespace from TF state if present
+        run: terraform state rm volterra_namespace.this 2>/dev/null || true
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve -input=false
