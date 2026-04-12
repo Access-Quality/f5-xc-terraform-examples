@@ -8,15 +8,10 @@ data "oci_identity_availability_domains" "ads" {
 }
 
 data "oci_core_images" "ubuntu_22" {
-  compartment_id           = local.compartment_ocid
+  compartment_id           = var.tenancy_ocid
   operating_system         = "Canonical Ubuntu"
   operating_system_version = "22.04"
   sort_by                  = "TIMECREATED"
   sort_order               = "DESC"
   state                    = "AVAILABLE"
-
-  filter {
-    name   = "launch_mode"
-    values = ["NATIVE", "PARAVIRTUALIZED"]
-  }
 }
