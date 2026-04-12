@@ -112,26 +112,38 @@ Este caso sirve para mostrar un patron de aislamiento logico por aplicacion en e
 
 ---
 
+### 11. API + WAF + Bot Defense en RE (Aplicación en OCI) — `waf-re-oci-apply.yml`
+
+Despliega un **Web Application Firewall (WAF), API Protection y Bot Defense sobre el Regional Edge (RE) de F5 Distributed Cloud**, protegiendo la aplicación **Arcadia Finance** que corre en una instancia Compute dentro de una VCN en **Oracle Cloud Infrastructure (OCI)**. El tráfico de internet pasa por el RE global de F5 XC antes de llegar a la aplicación, sin necesidad de instalar un Customer Edge en la infraestructura del cliente. El HTTP Load Balancer se publica con una VIP pública en el RE; la WAF policy opera en **modo monitoreo** (`XC_WAF_BLOCKING = false`). Adicionalmente, se activa **API Discovery** (detección automática de endpoints), **API Protection** (validación en **modo report** sin bloqueo, para permitir el flujo completo de la UI) y **Bot Defense** (detección de clientes automatizados en **modo flag**, registrando eventos sin interrumpir el login desde el browser; configurable vía `XC_BOT_DEFENSE`).
+
+La infraestructura en OCI se provisiona con tres workspaces de Terraform Cloud en modo Local: **INFRA** (VCN, subred, security list), **VM** (instancia `VM.Standard.E2.1` con Ubuntu 22.04 y los cinco contenedores Docker de Arcadia Finance) y **XC** (WAF, origin pool y LB en F5 XC con swagger de Arcadia subido al object store).
+
+👉 [Ver guía completa](readme/README-waf-re-oci-apply.md)
+
+---
+
 ### Comparativa de Arquitectura por Caso de Uso
 
 La siguiente tabla resume la topología de cada caso: dónde se inspecciona el tráfico, si fluye por el Regional Edge global de F5, si se instala un Customer Edge en el entorno del cliente y si la aplicación puede permanecer en una red privada sin IP pública expuesta.
 
-| Caso | Workflow | Nombre del workflow | Aplicación | Pruebas de seguridad | Punto de inspección | Tráfico pasa por RE | CE en cliente | AppConnect (túnel RE→CE) | App sin IP pública | Dónde corre la app | Nube |
-| ---- | -------- | ------------------- | ---------- | :------------------: | ------------------- | :-----------------: | :-----------: | :----------------------: | :----------------: | ------------------ | ---- |
-| 1 | `waf-re-aws-apply.yml` | API + WAF + BD en RE para VM en AWS | Arcadia Finance | WAF · API · BD | **RE** (Regional Edge) | ✅ | ❌ | ❌ | ❌ | VM (EC2) | AWS |
-| 2 | `waf-on-ce-aws-apply.yml` | WAF on CE AWS | Online Boutique | WAF | **CE** (Customer Edge) | ❌ | ✅ EKS | ❌ | ✅ | Clúster EKS | AWS |
-| 3 | `waf-on-ce-az-apply.yml` | WAF en CE AZ | Online Boutique | WAF | **CE** (Customer Edge) | ❌ | ✅ AKS | ❌ | ✅ | Clúster AKS | Azure |
-| 4 | `waf-re-ac-aws-vm-apply.yml` | WAF en RE + AppConnect AWS | DVWA | WAF | **RE + CE** | ✅ | ✅ EC2 | ✅ | ✅ | VM (EC2) | AWS |
-| 5 | `f5xc-api-ce-eks-apply.yml` | API WAF en RE para CE dentro de EKS | crAPI | WAF · API | **RE + CE** | ✅ | ✅ CE dentro del clúster EKS | ✅ | ✅ | Clúster EKS | AWS |
-| 6 | `teachable-01-mc-networkconnect-apply.yml` | Teachable 01-mcn-networkconnect | — (MCN) | — | **CE** (MCN este-oeste) | ✅ Global VN | ✅ AWS + Azure | ❌ | ✅ | VMs en AWS y Azure | AWS + Azure |
-| 7 | `bookinfo-smcn-apply.yaml` | Secure Multi-Cloud Networking | Bookinfo | WAF | **RE + CE** | ✅ | ✅ EKS + AKS | ✅ | ✅ | Clústeres EKS + AKS | AWS + Azure |
-| 8 | `sec-re-aws-todas-apply.yml` | Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS | Arcadia Finance + DVWA + Online Boutique + crAPI | WAF · API · BD | **RE** (Regional Edge) | ✅ | ❌ | ❌ | ❌ | VM (EC2) compartida | AWS |
-| 9 | `sec-re-aws-todas-sin-ngix-apply.yml` | Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS sin nginx | Arcadia Finance + DVWA + Online Boutique + crAPI | WAF · API · BD | **RE** (Regional Edge) | ✅ | ❌ | ❌ | ❌ | VM (EC2) compartida sin nginx | AWS |
-| 10 | `sec-re-aws-todas-4lbs.yml` | Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS con 4 LBs XC | Arcadia Finance + DVWA + Online Boutique + crAPI | WAF · API · BD | **RE** (Regional Edge) | ✅ | ❌ | ❌ | ❌ | VM (EC2) compartida sin nginx + 4 LBs | AWS |
+| Caso | Workflow                                   | Nombre del workflow                                                        | Aplicación                                       | Pruebas de seguridad | Punto de inspección     | Tráfico pasa por RE |        CE en cliente         | AppConnect (túnel RE→CE) | App sin IP pública | Dónde corre la app                    | Nube        |
+| ---- | ------------------------------------------ | -------------------------------------------------------------------------- | ------------------------------------------------ | :------------------: | ----------------------- | :-----------------: | :--------------------------: | :----------------------: | :----------------: | ------------------------------------- | ----------- |
+| 1    | `waf-re-aws-apply.yml`                     | API + WAF + BD en RE para VM en AWS                                        | Arcadia Finance                                  |    WAF · API · BD    | **RE** (Regional Edge)  |         ✅          |              ❌              |            ❌            |         ❌         | VM (EC2)                              | AWS         |
+| 2    | `waf-on-ce-aws-apply.yml`                  | WAF on CE AWS                                                              | Online Boutique                                  |         WAF          | **CE** (Customer Edge)  |         ❌          |            ✅ EKS            |            ❌            |         ✅         | Clúster EKS                           | AWS         |
+| 3    | `waf-on-ce-az-apply.yml`                   | WAF en CE AZ                                                               | Online Boutique                                  |         WAF          | **CE** (Customer Edge)  |         ❌          |            ✅ AKS            |            ❌            |         ✅         | Clúster AKS                           | Azure       |
+| 4    | `waf-re-ac-aws-vm-apply.yml`               | WAF en RE + AppConnect AWS                                                 | DVWA                                             |         WAF          | **RE + CE**             |         ✅          |            ✅ EC2            |            ✅            |         ✅         | VM (EC2)                              | AWS         |
+| 5    | `f5xc-api-ce-eks-apply.yml`                | API WAF en RE para CE dentro de EKS                                        | crAPI                                            |      WAF · API       | **RE + CE**             |         ✅          | ✅ CE dentro del clúster EKS |            ✅            |         ✅         | Clúster EKS                           | AWS         |
+| 6    | `teachable-01-mc-networkconnect-apply.yml` | Teachable 01-mcn-networkconnect                                            | — (MCN)                                          |          —           | **CE** (MCN este-oeste) |    ✅ Global VN     |        ✅ AWS + Azure        |            ❌            |         ✅         | VMs en AWS y Azure                    | AWS + Azure |
+| 7    | `bookinfo-smcn-apply.yaml`                 | Secure Multi-Cloud Networking                                              | Bookinfo                                         |         WAF          | **RE + CE**             |         ✅          |         ✅ EKS + AKS         |            ✅            |         ✅         | Clústeres EKS + AKS                   | AWS + Azure |
+| 8    | `sec-re-aws-todas-apply.yml`               | Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS              | Arcadia Finance + DVWA + Online Boutique + crAPI |    WAF · API · BD    | **RE** (Regional Edge)  |         ✅          |              ❌              |            ❌            |         ❌         | VM (EC2) compartida                   | AWS         |
+| 9    | `sec-re-aws-todas-sin-ngix-apply.yml`      | Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS sin nginx    | Arcadia Finance + DVWA + Online Boutique + crAPI |    WAF · API · BD    | **RE** (Regional Edge)  |         ✅          |              ❌              |            ❌            |         ❌         | VM (EC2) compartida sin nginx         | AWS         |
+| 10   | `sec-re-aws-todas-4lbs.yml`                | Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS con 4 LBs XC | Arcadia Finance + DVWA + Online Boutique + crAPI |    WAF · API · BD    | **RE** (Regional Edge)  |         ✅          |              ❌              |            ❌            |         ❌         | VM (EC2) compartida sin nginx + 4 LBs | AWS         |
+| 11   | `waf-re-oci-apply.yml`                     | API + WAF + BD en RE para VM en OCI                                        | Arcadia Finance                                  |    WAF · API · BD    | **RE** (Regional Edge)  |         ✅          |              ❌              |            ❌            |         ❌         | VM (OCI Compute)                      | OCI         |
 
 > **Pruebas de seguridad:** WAF = Web Application Firewall (SQLi, XSS, RCE…) · API = API Discovery + API Protection · BD = Bot Defense
 
 **Glosario:**
+
 - **RE (Regional Edge):** PoP global de F5. El tráfico de internet fluye por infraestructura de F5 antes de llegar a la aplicación.
 - **CE (Customer Edge):** Nodo desplegado en la infraestructura del cliente. Inspección local; el plano de control siempre conecta con F5 XC cloud.
 - **AppConnect:** El tráfico entra al RE global y se reenvía a la app a través de un túnel cifrado hasta el CE. La app no necesita IP pública.
@@ -143,19 +155,19 @@ La siguiente tabla resume la topología de cada caso: dónde se inspecciona el t
 
 Cada caso de uso incluye una aplicación diferente. La siguiente tabla resume qué tipo de pruebas encajan mejor con cada una:
 
-| Tipo de prueba                             | Arcadia Finance (caso 1) | DVWA (caso 4) | Online Boutique (casos 2 y 3) | crAPI (caso 5) | Arcadia + DVWA + Boutique + crAPI (casos 8, 9 y 10) |
-| ------------------------------------------ | :----------------------: | :-----------: | :---------------------------: | :------------: | :---------------------: |
-| WAF — SQLi, XSS, Command Injection         | ✅                        | ✅ Ideal       | ⚠️ Limitado                   | ⚠️ Parcial     | ✅ Ideal                |
-| WAF — File upload / RCE                    | ❌                        | ✅ Ideal       | ❌                             | ❌              | ✅ Válido               |
-| WAF — Brute force de login                 | ✅                        | ✅ Ideal       | ⚠️                            | ✅              | ✅ Ideal                |
-| Bot Defense (credential stuffing)          | ✅ Ideal                  | ✅ Válido      | ⚠️ Limitado                   | ✅ Válido       | ✅ Válido               |
-| API Discovery (inventario de endpoints)    | ✅ Ideal                  | ❌             | ❌                             | ✅ Ideal        | ✅ Válido               |
-| API Protection (validación OpenAPI)        | ✅ Ideal                  | ❌             | ❌                             | ✅ Ideal        | ✅ Válido               |
-| SSRF + OpenAPI Validation                  | ❌                        | ❌             | ❌                             | ✅ Ideal        | ⚠️ Parcial             |
-| BOLA / IDOR (OWASP API Top 10)             | ❌                        | ❌             | ❌                             | ✅ Ideal        | ⚠️ Parcial             |
-| Rate limiting / abuso de API               | ✅ Válido                 | ✅ Válido      | ✅ Ideal                       | ✅ Ideal        | ✅ Ideal                |
-| DDoS L7 (flood HTTP)                       | ✅ Válido                 | ✅ Válido      | ✅ Ideal                       | ✅ Válido       | ✅ Ideal                |
-| OWASP Web Top 10 (módulos didácticos)      | ❌                        | ✅ Ideal       | ❌                             | ❌              | ✅ Ideal                |
+| Tipo de prueba                          | Arcadia Finance (casos 1 y 11) | DVWA (caso 4) | Online Boutique (casos 2 y 3) | crAPI (caso 5) | Arcadia + DVWA + Boutique + crAPI (casos 8, 9 y 10) |
+| --------------------------------------- | :----------------------------: | :-----------: | :---------------------------: | :------------: | :-------------------------------------------------: |
+| WAF — SQLi, XSS, Command Injection      |               ✅               |   ✅ Ideal    |          ⚠️ Limitado          |   ⚠️ Parcial   |                      ✅ Ideal                       |
+| WAF — File upload / RCE                 |               ❌               |   ✅ Ideal    |              ❌               |       ❌       |                      ✅ Válido                      |
+| WAF — Brute force de login              |               ✅               |   ✅ Ideal    |              ⚠️               |       ✅       |                      ✅ Ideal                       |
+| Bot Defense (credential stuffing)       |            ✅ Ideal            |   ✅ Válido   |          ⚠️ Limitado          |   ✅ Válido    |                      ✅ Válido                      |
+| API Discovery (inventario de endpoints) |            ✅ Ideal            |      ❌       |              ❌               |    ✅ Ideal    |                      ✅ Válido                      |
+| API Protection (validación OpenAPI)     |            ✅ Ideal            |      ❌       |              ❌               |    ✅ Ideal    |                      ✅ Válido                      |
+| SSRF + OpenAPI Validation               |               ❌               |      ❌       |              ❌               |    ✅ Ideal    |                     ⚠️ Parcial                      |
+| BOLA / IDOR (OWASP API Top 10)          |               ❌               |      ❌       |              ❌               |    ✅ Ideal    |                     ⚠️ Parcial                      |
+| Rate limiting / abuso de API            |           ✅ Válido            |   ✅ Válido   |           ✅ Ideal            |    ✅ Ideal    |                      ✅ Ideal                       |
+| DDoS L7 (flood HTTP)                    |           ✅ Válido            |   ✅ Válido   |           ✅ Ideal            |   ✅ Válido    |                      ✅ Ideal                       |
+| OWASP Web Top 10 (módulos didácticos)   |               ❌               |   ✅ Ideal    |              ❌               |       ❌       |                      ✅ Ideal                       |
 
 > Cada README de caso incluye una sección **"Pruebas de seguridad"** con ejemplos curl específicos para la aplicación correspondiente.
 
@@ -163,26 +175,33 @@ Cada caso de uso incluye una aplicación diferente. La siguiente tabla resume qu
 
 ### Archivos de Flujo de Trabajo
 
-| **Workflow**                               | **Capacidades**                          | **Guía**                                                         |
-| ------------------------------------------ | ---------------------------------------- | ----------------------------------------------------------------- |
-| `waf-re-aws-apply.yml`                     | WAF + API Discovery + API Protection + Bot Defense | [README](readme/README-waf-re-aws-apply.md)                       |
-| `waf-on-ce-aws-apply.yml`                  | WAF en CE                                | [README](readme/README-waf-on-ce-aws-apply.md)                    |
-| `waf-on-ce-az-apply.yml`                   | WAF en CE                                | [README](readme/README-waf-on-ce-az-apply.md)                     |
-| `waf-re-ac-aws-vm-apply.yml`               | WAF en RE + AppConnect                   | [README](readme/README-waf-re-ac-aws-vm-apply.md)                 |
-| `f5xc-api-ce-eks-apply.yml`                | API Security + WAF en RE + CE en EKS     | [README](readme/README-f5xc-api-ce-eks-apply.md)                  |
-| `teachable-01-mc-networkconnect-apply.yml` | MCN Network Connect                      | [README](readme/README-teachable-01-mcn-networkconnect-apply.md)  |
-| `bookinfo-smcn-apply.yaml`                 | Multi-cloud + WAF                        | [README](readme/README-bookinfo-smcn-apply.md)                    |
-| `sec-re-aws-todas-apply.yml`               | WAF global + API Discovery/Protection para Arcadia y crAPI + Bot Defense opcional + interfaz web de apoyo para crAPI | [README](readme/README-sec-re-aws-todas-apply.md)           |
-| `sec-re-aws-todas-sin-ngix-apply.yml`      | WAF global + routing en XC sin nginx en la VM + API Discovery/Protection para Arcadia y crAPI + Bot Defense opcional | [README](readme/README-sec-re-aws-todas-sin-nginx-apply.md) |
-| `sec-re-aws-todas-sin-ngix-destroy.yml`    | Destroy del caso 9: elimina XC, limpia specs, destruye VM y luego infra | [README](readme/README-sec-re-aws-todas-sin-nginx-apply.md) |
-| `sec-re-aws-todas-4lbs.yml`                | WAF global + 4 LBs en XC sobre una sola VM sin nginx + API Discovery para Arcadia + API Discovery/Protection para crAPI + Bot Defense opcional | [README](readme/README-sec-re-aws-todas-4lbs-apply.md) |
-| `sec-re-aws-todas-4lbs-destroy.yml`        | Destroy del caso 10: elimina XC, limpia specs, destruye VM y luego infra | [README](readme/README-sec-re-aws-todas-4lbs-apply.md) |
+| **Workflow**                               | **Capacidades**                                                                                                                                | **Guía**                                                         |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `waf-re-aws-apply.yml`                     | WAF + API Discovery + API Protection + Bot Defense                                                                                             | [README](readme/README-waf-re-aws-apply.md)                      |
+| `waf-on-ce-aws-apply.yml`                  | WAF en CE                                                                                                                                      | [README](readme/README-waf-on-ce-aws-apply.md)                   |
+| `waf-on-ce-az-apply.yml`                   | WAF en CE                                                                                                                                      | [README](readme/README-waf-on-ce-az-apply.md)                    |
+| `waf-re-ac-aws-vm-apply.yml`               | WAF en RE + AppConnect                                                                                                                         | [README](readme/README-waf-re-ac-aws-vm-apply.md)                |
+| `f5xc-api-ce-eks-apply.yml`                | API Security + WAF en RE + CE en EKS                                                                                                           | [README](readme/README-f5xc-api-ce-eks-apply.md)                 |
+| `teachable-01-mc-networkconnect-apply.yml` | MCN Network Connect                                                                                                                            | [README](readme/README-teachable-01-mcn-networkconnect-apply.md) |
+| `bookinfo-smcn-apply.yaml`                 | Multi-cloud + WAF                                                                                                                              | [README](readme/README-bookinfo-smcn-apply.md)                   |
+| `sec-re-aws-todas-apply.yml`               | WAF global + API Discovery/Protection para Arcadia y crAPI + Bot Defense opcional + interfaz web de apoyo para crAPI                           | [README](readme/README-sec-re-aws-todas-apply.md)                |
+| `sec-re-aws-todas-sin-ngix-apply.yml`      | WAF global + routing en XC sin nginx en la VM + API Discovery/Protection para Arcadia y crAPI + Bot Defense opcional                           | [README](readme/README-sec-re-aws-todas-sin-nginx-apply.md)      |
+| `sec-re-aws-todas-sin-ngix-destroy.yml`    | Destroy del caso 9: elimina XC, limpia specs, destruye VM y luego infra                                                                        | [README](readme/README-sec-re-aws-todas-sin-nginx-apply.md)      |
+| `sec-re-aws-todas-4lbs.yml`                | WAF global + 4 LBs en XC sobre una sola VM sin nginx + API Discovery para Arcadia + API Discovery/Protection para crAPI + Bot Defense opcional | [README](readme/README-sec-re-aws-todas-4lbs-apply.md)           |
+| `sec-re-aws-todas-4lbs-destroy.yml`        | Destroy del caso 10: elimina XC, limpia specs, destruye VM y luego infra                                                                       | [README](readme/README-sec-re-aws-todas-4lbs-apply.md)           |
+| `waf-re-oci-apply.yml`                     | WAF + API Discovery + API Protection + Bot Defense en OCI                                                                                      | [README](readme/README-waf-re-oci-apply.md)                      |
+| `waf-re-oci-destroy.yml`                   | Destroy del caso 11: elimina XC, destruye VM y luego infra en OCI                                                                              | [README](readme/README-waf-re-oci-apply.md)                      |
 
 ---
 
 ## Historial de Cambios
 
+### 2026-04-12
+
+- **API + WAF + Bot Defense en RE OCI** (`waf-re-oci-apply.yml` / `waf-re-oci-destroy.yml`): nuevo caso 11, equivalente al caso 1 (Arcadia Finance + F5 XC RE) pero sobre **Oracle Cloud Infrastructure**. Despliega Arcadia Finance en una instancia `VM.Standard.E2.1` (Ubuntu 22.04, 5 contenedores Docker) dentro de una VCN en OCI, con tres workspaces de Terraform Cloud en modo Local (INFRA, VM, XC). F5 XC protege la aplicación con WAF + API Discovery + API Protection (swagger de Arcadia en el object store) + Bot Defense sobre el Regional Edge.
+
 ### 2026-03-27
+
 - **Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS con 4 LBs XC** (`sec-re-aws-todas-4lbs.yml` / `sec-re-aws-todas-4lbs-destroy.yml`): nuevo caso 10 que reutiliza la VM compartida sin nginx del caso 9, pero divide la exposicion publica en **4 HTTP Load Balancers** de F5 XC. Arcadia, DVWA y Boutique usan LBs dedicados; **crAPI y Mailhog** comparten el cuarto LB. Se agregan guias dedicadas de despliegue y pruebas para este caso.
 
 - **Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS sin nginx** (`sec-re-aws-todas-sin-ngix-apply.yml` / `sec-re-aws-todas-sin-ngix-destroy.yml`): nuevo caso 9 que reutiliza el patron de una sola VM compartida en AWS pero elimina nginx del host. El routing por `Host` y `path` se mueve al HTTP Load Balancer de F5 XC usando multiples origin pools sobre la misma Elastic IP y distintos puertos de la VM. Se agrega una guia dedicada para este caso, se documenta el tradeoff de seguridad por exponer varios puertos en el security group y se incorpora el workflow de destroy correspondiente.
@@ -190,10 +209,12 @@ Cada caso de uso incluye una aplicación diferente. La siguiente tabla resume qu
 - **Seguridad en RE para Arcadia + DVWA + Boutique + crAPI en AWS** (`sec-re-aws-todas-apply.yml` / `sec-re-aws-todas-destroy.yml`): el caso compartido en una sola VM EC2 de AWS publica tambien **Mailhog** como interfaz web de apoyo para crAPI con el FQDN `MAILHOG_DOMAIN`, sobre el mismo nginx del host y el mismo HTTP Load Balancer de F5 XC. Esto permite revisar desde internet los correos de laboratorio usados por crAPI, manteniendo el patron de enrutamiento por `Host` y las validaciones de readiness sobre origen y endpoints publicos.
 
 ### 2026-03-26
+
 - **API + WAF + Bot Defense en RE AWS** (`waf-re-aws-apply.yml` / `waf-re-aws-destroy.yml`): workflows renombrados a `API + WAF + BD` para reflejar que incluyen **WAF**, **API Discovery**, **API Protection** y **Bot Defense** (opcional vía variable `XC_BOT_DEFENSE`). Se agregó `VOLT_API_P12_FILE` al job `terraform_xc` de ambos workflows para correcta autenticación del provider de F5 XC.
 
 ### 2026-03-25
-- **WAF on CE Azure** (`waf-on-ce-az-apply.yml` / `waf-on-ce-az-destroy.yml`): la variable de GitHub `APP_DOMAIN` fue renombrada a `BOUTIQUE_DOMAIN` para mayor claridad sobre la aplicación protegida. Actualizar el valor en *Settings → Secrets and variables → Variables* del repositorio.
+
+- **WAF on CE Azure** (`waf-on-ce-az-apply.yml` / `waf-on-ce-az-destroy.yml`): la variable de GitHub `APP_DOMAIN` fue renombrada a `BOUTIQUE_DOMAIN` para mayor claridad sobre la aplicación protegida. Actualizar el valor en _Settings → Secrets and variables → Variables_ del repositorio.
 - **WAF on CE AWS** (`waf-on-ce-aws-apply.yml` / `waf-on-ce-aws-destroy.yml`): nombre del workflow actualizado a `WAF on CE AWS - Deploy / Destroy` para seguir la convención de nomenclatura del resto de workflows.
 
 ---
