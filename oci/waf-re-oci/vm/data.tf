@@ -14,4 +14,9 @@ data "oci_core_images" "ubuntu_22" {
   sort_by                  = "TIMECREATED"
   sort_order               = "DESC"
   state                    = "AVAILABLE"
+
+  filter {
+    name   = "launch_mode"
+    values = ["NATIVE", "PARAVIRTUALIZED"]
+  }
 }

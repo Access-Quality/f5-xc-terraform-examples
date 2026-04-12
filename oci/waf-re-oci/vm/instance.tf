@@ -13,6 +13,7 @@ resource "oci_core_instance" "arcadia" {
     source_type             = "image"
     source_id               = data.oci_core_images.ubuntu_22.images[0].id
     boot_volume_size_in_gbs = 50
+    boot_volume_vpus_per_gb = 10
   }
 
   create_vnic_details {
