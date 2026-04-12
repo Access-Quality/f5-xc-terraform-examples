@@ -11,6 +11,5 @@ resource "volterra_app_firewall" "waap-tf" {
   use_default_blocking_page  = true
   default_bot_setting        = true
   default_detection_settings = true
-  use_loadbalancer_setting   = true
   blocking                   = var.xc_waf_blocking
 }
