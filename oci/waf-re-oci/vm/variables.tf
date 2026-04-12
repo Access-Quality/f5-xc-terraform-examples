@@ -37,5 +37,5 @@ variable "ssh_key" {
 variable "instance_shape" {
   type        = string
   description = "OCI compute shape for the Arcadia instance"
-  default     = "VM.Standard.E2.1.Micro"
+  default     = "VM.Standard.E2.1"
 }
