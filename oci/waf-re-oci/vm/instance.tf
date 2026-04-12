@@ -4,11 +4,6 @@ resource "oci_core_instance" "arcadia" {
   display_name        = format("%s-arcadia-%s", local.project_prefix, local.build_suffix)
   shape               = var.instance_shape
 
-  shape_config {
-    ocpus         = var.instance_ocpus
-    memory_in_gbs = var.instance_memory_gb
-  }
-
   source_details {
     source_type             = "image"
     source_id               = data.oci_core_images.ubuntu_22.images[0].id

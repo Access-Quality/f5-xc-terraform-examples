@@ -37,17 +37,5 @@ variable "ssh_key" {
 variable "instance_shape" {
   type        = string
   description = "OCI compute shape for the Arcadia instance"
-  default     = "VM.Standard.E4.Flex"
-}
-
-variable "instance_ocpus" {
-  type        = number
-  description = "Number of OCPUs for the Flex shape"
-  default     = 1
-}
-
-variable "instance_memory_gb" {
-  type        = number
-  description = "Memory in GBs for the Flex shape"
-  default     = 4
+  default     = "VM.Standard.E2.1.Micro"
 }
