@@ -13,4 +13,5 @@ data "oci_core_images" "ubuntu_22" {
   operating_system_version = "22.04"
   sort_by                  = "TIMECREATED"
   sort_order               = "DESC"
+  state                    = "AVAILABLE"
 }
